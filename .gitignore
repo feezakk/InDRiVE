@@ -126,3 +126,15 @@ venv.bak/
 
 .npy
 .npz
+
+*.ckpt
+# outputs/results
+InDRiVE Results/
+results/
+*.bag
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.npy
+*.pkl
