@@ -57,6 +57,8 @@ class Random(nj.Module):
 class Explore(nj.Module):
     REWARDS = {
         "disag": expl.Disag,
+        "rnd"  : expl.RND,
+        "icm"  : expl.ICM,    
     }
 
     def __init__(self, wm, act_space, config):

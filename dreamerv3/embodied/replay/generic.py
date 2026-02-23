@@ -110,7 +110,21 @@ class Generic:
         else:
             seq = self.table[self.sampler()]
         seq = {k: [step[k] for step in seq] for k in seq[0]}
-        seq = {k: embodied.convert(v) for k, v in seq.items()}
+        # Convert per-key sequences with diagnostics to catch shape/type issues.
+        converted = {}
+        for k, v in seq.items():
+            try:
+                converted[k] = embodied.convert(v)
+            except Exception as e:
+                try:
+                    shapes = [getattr(x, "shape", None) for x in v]
+                    types = [type(x).__name__ for x in v]
+                except Exception:
+                    shapes, types = None, None
+                raise RuntimeError(
+                    f"Replay convert failed for key '{k}'. Element types: {types}. Element shapes: {shapes}."
+                ) from e
+        seq = converted
         if "is_first" in seq:
             seq["is_first"][0] = True
         return seq

@@ -13,7 +13,7 @@ class BasePlanner(ABC):
     To inherit, implement :py:meth:`init_route` and :py:meth:`extend_route`.
     """
 
-    def __init__(self, vehicle: carla.Actor, max_waypoints=60, reach_threshold=0.5):
+    def __init__(self, vehicle: carla.Actor, max_waypoints=60, reach_threshold=1.5):
         self._vehicle = vehicle
         self._world = self._vehicle.get_world()
         self._map = self._world.get_map()
@@ -125,8 +125,12 @@ class BasePlanner(ABC):
         num_obsolete = 0
         num_to_delete = 0
         min_distance = 100
+        # print(self._waypoints_queue)
         for i, waypoint in enumerate(self._waypoints_queue):
             dist = get_location_distance(self._vehicle_location, waypoint)
+            # print("way: " , waypoint)
+            # print("loc: ", self._vehicle_location)
+            # print("dist: ", dist)
             if dist < self._reach_threshold:
                 num_completed += 1
                 num_to_delete = i + 1

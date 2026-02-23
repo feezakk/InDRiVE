@@ -69,8 +69,30 @@ class Driver:
         if obs["is_last"].any():
             for i, done in enumerate(obs["is_last"]):
                 if done:
-                    ep = {k: convert(v) for k, v in self._eps[i].items()}
-                    ep_info = {k: convert(v) for k, v in self._eps_info[i].items()}
+                    # Convert episode lists to arrays; if a key has inconsistent
+                    # shapes across timesteps, drop it with a warning instead of crashing.
+                    ep = {}
+                    for k, v in self._eps[i].items():
+                        try:
+                            ep[k] = convert(v)
+                        except Exception:
+                            try:
+                                shapes = [getattr(x, "shape", None) for x in v]
+                            except Exception:
+                                shapes = None
+                            print(f"[Driver] Dropping episode key '{k}' due to inconsistent shapes: {shapes}")
+                            continue
+                    ep_info = {}
+                    for k, v in self._eps_info[i].items():
+                        try:
+                            ep_info[k] = convert(v)
+                        except Exception:
+                            try:
+                                shapes = [getattr(x, "shape", None) for x in v]
+                            except Exception:
+                                shapes = None
+                            print(f"[Driver] Dropping episode info key '{k}' due to inconsistent shapes: {shapes}")
+                            continue
                     [fn(ep.copy(), ep_info.copy(), i, **self._kwargs) for fn in self._on_episodes]
                     episode += 1
         return step, episode

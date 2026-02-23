@@ -1,6 +1,8 @@
 import numpy as np
 
-from dreamerv3.embodied.replay import CuriousReplay
+# from dreamerv3.embodied.replay import CuriousReplay
+
+from .curious_replay import CuriousReplay
 
 
 class AdversarialReplay(CuriousReplay):

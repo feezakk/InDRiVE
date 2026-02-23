@@ -7,6 +7,9 @@ env:
     actor_active_distance: 100
     fixed_delta_seconds: 0.1
     auto_lane_change: True
+    # Traffic Manager port offset relative to carla_port.
+    # Web monitor uses carla_port + 7000; keep this different to avoid conflicts.
+    tm_port_offset: 5000
     traffic:
       tm_seed: 2024
 
@@ -25,6 +28,32 @@ env:
         fov: 120.0
         sensor_tick: 0.1
 
+    semantic_segmentation:
+        handler: semantic_segmentation
+        blueprint: sensor.camera.semantic_segmentation
+        key: semantic_segmentation
+        shape: [128, 128, 3]
+        transform:
+          x: 1.5
+          z: 2.0
+        attributes:
+          image_size_x: 128
+          image_size_y: 128
+          fov: 120.0
+          sensor_tick: 0.1
+
+    lane_invasion:
+      handler: lane_invasion
+      blueprint: sensor.other.lane_invasion
+      key: lane_invasion
+      shape: [1]
+
+    lane_invasion_raw:
+      handler: lane_invasion
+      blueprint: sensor.other.lane_invasion
+      key: lane_invasion
+      shape: [1]
+      
     # LiDAR sensor
     lidar:
       handler: lidar
@@ -159,14 +188,16 @@ env:
 
   display:
     enable: True
-    render_keys: [camera, birdeye_wpt]
-    image_size: 512
+    backend: pygame
+    # render_keys: [camera, birdeye_wpt]
+    # image_size: 128
 
   action:
     discrete: True
     # Discrete control space. Use continuos_acc and continuous_steer if discrete is False
-    discrete_acc: [-2.0, 0.0, 2.0] # discrete value of accelerations
-    discrete_steer: [-0.6, -0.2, 0.0, 0.2, 0.6] # discrete value of steering angles
+    # Updated defaults: throttle choices 0.0 or 0.5, steering -0.3/0.0/0.3
+    discrete_acc: [0.2, 0.3] # discrete value of accelerations (throttle)
+    discrete_steer: [-0.3, 0.0, 0.3] # discrete value of steering angles
     continuous_acc: [-3.0, 3.0] # continuous value of accelerations
     continuous_steer: [-1.0, 1.0] # continuous value of steering angles
     n_commands: 3 # number of text commands for message handler

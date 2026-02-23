@@ -40,7 +40,7 @@ class EnvMonitorBase:
 
         app.run(
             host="0.0.0.0",
-            port=self._config.world.carla_port + 7000,
+            port=self._config.world.carla_port + 11000,
             use_reloader=False,
         )
 

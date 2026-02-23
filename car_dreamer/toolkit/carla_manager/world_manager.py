@@ -48,7 +48,10 @@ class WorldManager:
         self._world.apply_settings(settings)
         self._settings = settings
 
-        self._tm_port = self._config.carla_port + 6000
+        # Traffic Manager runs its own RPC server. Avoid port clash with the web monitor
+        # (which uses carla_port + 7000). Allow optional override via config: env.world.tm_port_offset.
+        tm_port_offset = getattr(self._config, "tm_port_offset", 5000)
+        self._tm_port = self._config.carla_port + tm_port_offset
         self._vehicle_manager = VehicleManager(self._client, self._tm_port, self._config.traffic)
 
         self._on_reset = None
@@ -165,7 +168,11 @@ class WorldManager:
 
         .. seealso:: :py:meth:`try_spawn_actor`
         """
+
+        print(transform)
+
         actor = self.try_spawn_actor(transform, blueprint)
+
         try_time = 0
         while actor is None and (max_try_time is None or try_time < max_try_time):
             print("[CARLA] Failed to spawn actor, retrying...")

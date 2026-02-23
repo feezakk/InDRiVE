@@ -12,7 +12,7 @@ GPU_DEVICE=$2
 CHECKPOINT_PATH=$3
 LOG_FILE="eval_log_${CARLA_PORT}.log"
 CARLA_SERVER_COMMAND="$CARLA_ROOT/CarlaUE4.sh -RenderOffScreen -carla-port=$CARLA_PORT -benchmark -fps=10"
-EVAL_SCRIPT="dreamerv3/eval.py"
+EVAL_SCRIPT="dreamerv3/eval_safety.py"
 COMMON_PARAMS="--env.world.carla_port $CARLA_PORT --dreamerv3.jax.policy_devices $GPU_DEVICE --dreamerv3.run.from_checkpoint $CHECKPOINT_PATH"
 ADDITIONAL_PARAMS="${@:4}"  # Capture all additional parameters passed to the script
 EVAL_COMMAND="python -u $EVAL_SCRIPT $COMMON_PARAMS $ADDITIONAL_PARAMS"

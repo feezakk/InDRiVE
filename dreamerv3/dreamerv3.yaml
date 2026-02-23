@@ -1,11 +1,34 @@
 defaults:
+  safe_train:
+    enable: false        # keep training unshielded by default
+    mode: one_step       # (used only if enable=true)
+    gamma: 0.99
+    horizon: 6
+    mix_collision: 0.5 # cost = mix_collision*collision + (1-mix)*offlane
+    lam: 0.25          # λ for training
+
+  safe_eval:
+    enable: True
+    enforce: False
+    mode: long
+    horizon: 3
+    agg: discounted
+    tau: 0.5
+    grid: {n_acc: 2, n_steer: 3}   # matches your env discrete layout
+    fallback: dynamic
+    alpha: 0.05
+    beta: 0.15
+    rel_radius: 0.2
+    rel_w: 0.05
+    calibrator_path: ""
+
   seed: 0
   method: name
   task: dummy_disc
   logdir: /dev/null
   replay: uniform
   # Use smalelr replay t osave memory; 1e5 can be suffcient for most tasks
-  replay_size: 1e6
+  replay_size: 1e8
   replay_online: False
   eval_dir: ""
   filter: ".*"
@@ -24,9 +47,10 @@ defaults:
 
   run:
     script: train
-    steps: 1e8
+    steps: 510000
     expl_until: 0
-    log_every: 1000
+    log_every: 10000
+    log_per_step: False
     save_every: 2000
     eval_every: 1e4
     eval_initial: True
@@ -54,7 +78,7 @@ defaults:
 
   # Agent
   task_behavior: Greedy
-  expl_behavior: None
+  expl_behavior: Explore
   batch_size: 16
   batch_length: 64
   data_loaders: 8
@@ -141,6 +165,32 @@ defaults:
       winit: normal,
       fan: avg,
     }
+  collision_head:
+    {
+      layers: 5,
+      units: 1024,
+      act: silu,
+      norm: layer,
+      dist: binary,
+      outscale: 1.0,
+      outnorm: False,
+      inputs: [deter, stoch],
+      winit: normal,
+      fan: avg,
+    }
+  offlane_head:
+    {
+      layers: 5,
+      units: 1024,
+      act: silu,
+      norm: layer,
+      dist: binary,
+      outscale: 1.0,
+      outnorm: False,
+      inputs: [deter, stoch],
+      winit: normal,
+      fan: avg,
+    }
   loss_scales:
     {
       image: 1.0,
@@ -152,6 +202,9 @@ defaults:
       actor: 1.0,
       critic: 1.0,
       slowreg: 1.0,
+      collision: 1.0,
+      offlane: 1.0,
+
     }
   dyn_loss: { impl: kl, free: 1.0 }
   rep_loss: { impl: kl, free: 1.0 }
@@ -233,8 +286,60 @@ defaults:
   retnorm: { impl: perc_ema, decay: 0.99, max: 1.0, perclo: 5.0, perchi: 95.0 }
   actent: 3e-4
 
+  shield_thresh: 0.3  # Threshold for action filter shield
+  shield_penalty: 0.1  # Penalty for shielded actions
+
+  icm_beta : 0.8          # weight on forward‑loss; (1-beta) on inverse
+  inverse_units: 512
+  forward_units: 512 
+  icm_opt:
+    lr    : 1e-4
+    eps   : 1e-8
+    opt   : adam
+
+  icm_head:
+    {
+      layers: 5,
+      units: 1024,
+      act: silu,
+      norm: layer,
+      dist: mse,
+      outscale: 1.0,
+      # inputs: [deter, stoch, action],
+      winit: normal,
+      fan: avg,
+    }
+
+  icm_norm:
+    decay : 0.99
+    eps      : 1e-8
+
+  rnd_feat_dim : 512
+
+  rnd_opt:
+    lr          : 1e-4
+    eps         : 1e-8
+    opt         : adam
+
+  rnd_norm:                # running mean/var for reward
+    decay: 0.99
+    eps          : 1e-8
+
+  rnd_head:
+    {
+      layers: 5,
+      units: 1024,
+      act: silu,
+      norm: layer,
+      dist: mse,
+      outscale: 1.0,
+      # inputs: [deter, stoch, action],
+      winit: normal,
+      fan: avg,
+    }
+
   # Exploration
-  expl_rewards: { extr: 1.0, disag: 0.1 }
+  expl_rewards: { extr: 1.0, disag: 0.0, icm  : 0.0, rnd: 0.0 }
   expl_opt: { opt: adam, lr: 1e-4, eps: 1e-5, clip: 100.0, wd: 0.0, warmup: 0 }
   disag_head:
     {

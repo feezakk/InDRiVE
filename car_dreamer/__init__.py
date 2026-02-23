@@ -46,6 +46,8 @@ def load_task_configs(task_name: str):
         config = toolkit.Config(config)
     with open(os.path.join(dir, "tasks.yaml")) as f:
         task_config = yaml.safe_load(f)
+        print(f"Loading task config for {task_name}...")
+        print("Available tasks:", list(task_config.keys()))
         config = config.update(task_config[task_name])
     return config
 

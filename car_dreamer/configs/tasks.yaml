@@ -12,8 +12,16 @@ carla_wpt:
         destination_reached: 20.0,
       }
   terminal:
-    time_limit: 500 # maximum timesteps per episode
-    out_lane_thres: 3 # threshold for out of lane
+    time_limit: 20000 # maximum timesteps per episode
+    out_lane_thres: 1.0 # threshold for out of lane
+
+    wrong_dir_angle_deg: 120.0
+    wrong_dir_min_speed: 0.5
+    wrong_dir_duration: 1
+    min_speed: 0.01
+    too_slow_duration: 2000
+    slow_grace_steps: 2000
+    off_road_dist_thres: 1.0
 
 carla_navigation:
   env:
@@ -183,38 +191,38 @@ carla_right_turn_random:
     decoder.cnn_kernels: [5, 5, 5, 6, 6]
     train.log_keys_video: [camera, birdeye_wpt]
 
-carla_left_turn_simple: &carla_left_turn_simple
-  env:
-    world:
-      town: Town03
-    name: CarlaLeftTurnEnv-v0
-    observation.enabled: [camera, collision, birdeye_wpt]
-    <<: *carla_wpt
-    lane_start_point: [6.0, -101.0, 0.1, -90.0]
-    ego_path: [[6.0, -101.0, 0.1], [-26.5, -139.0, 0.1]]
-    use_road_waypoints: [True, False]
-    flow_spawn_point: [-22.4, -135.4, 0.1, 0.0]
+# carla_left_turn_simple: &carla_left_turn_simple
+#   env:
+#     world:
+#       town: Town01
+#     name: CarlaLeftTurnEnv-v0
+#     observation.enabled: [camera, collision, birdeye_wpt]
+#     <<: *carla_wpt
+#     lane_start_point: [6.0, -101.0, 0.1, -90.0]
+#     ego_path: [[6.0, -101.0, 0.1], [-26.5, -139.0, 0.1]]
+#     use_road_waypoints: [True, False]
+#     flow_spawn_point: [-22.4, -135.4, 0.1, 0.0]
 
-  dreamerv3:
-    encoder.cnn_keys: "birdeye_wpt"
-    decoder.cnn_keys: "birdeye_wpt"
-    run.log_keys_video: [camera, birdeye_wpt]
+#   dreamerv3:
+#     encoder.cnn_keys: "birdeye_wpt"
+#     decoder.cnn_keys: "birdeye_wpt"
+#     run.log_keys_video: [camera, birdeye_wpt]
 
-  dreamerv2:
-    encoder.cnn_keys: "birdeye_wpt"
-    decoder.cnn_keys: "birdeye_wpt"
-    decoder.cnn_kernels: [5, 5, 5, 6, 6]
-    train.log_keys_video: [camera, birdeye_wpt]
+#   dreamerv2:
+#     encoder.cnn_keys: "birdeye_wpt"
+#     decoder.cnn_keys: "birdeye_wpt"
+#     decoder.cnn_kernels: [5, 5, 5, 6, 6]
+#     train.log_keys_video: [camera, birdeye_wpt]
 
-carla_left_turn_medium:
-  <<: *carla_left_turn_simple
-  env.min_flow_dist: 8
-  env.max_flow_dist: 16
+# carla_left_turn_medium:
+#   <<: *carla_left_turn_simple
+#   env.min_flow_dist: 8
+#   env.max_flow_dist: 16
 
-carla_left_turn_hard:
-  <<: *carla_left_turn_simple
-  env.min_flow_dist: 6
-  env.max_flow_dist: 8
+# carla_left_turn_hard:
+#   <<: *carla_left_turn_simple
+#   env.min_flow_dist: 6
+#   env.max_flow_dist: 8
 
 carla_roundabout:
   env:
@@ -438,3 +446,324 @@ carla_follow:
     decoder.cnn_keys: "birdeye_wpt"
     decoder.cnn_kernels: [5, 5, 5, 6, 6]
     train.log_keys_video: [birdeye_wpt]
+
+carla_lane_following:
+  env:
+    world:
+      carla_port: 20000
+      town: "Town01" # , "Town05" , "Town04]" # which town to simulate
+      background_speed: 25
+      actor_active_distance: 100
+      fixed_delta_seconds: 0.1
+      auto_lane_change: False
+      traffic:
+        tm_seed: 2024
+
+    name: CarlaLaneFollowingEnv-v0
+
+    action:
+      discrete: True 
+    # discrete accelerations (throttle) -- add full throttle option for better control authority
+    discrete_acc: [0.5, 0.7]  # discrete value of accelerations (throttle)
+    discrete_steer: [-0.3, 0.0, 0.3] # discrete value of steering angles
+    n_commands: 3 # number of text commands
+    continuous_acc: [0.0, 1.0]
+    continuous_steer: [-0.8, 0.8]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+    
+    num_vehicles: 0
+
+    reward:
+      # desired_speed is in meters/second (m/s). 25 m/s ~= 90 km/h.
+      desired_speed: 25 # desired speed (m/s)
+      scales:
+        {
+          waypoint: 2.0,
+          speed: 2.0,
+          collision: 30.0,
+          out_of_lane: 3.0,
+          time: 20.0,
+          destination_reached: 100.0,
+        }
+
+    max_distance: 5.0  # meters
+    min_speed_mps: 0.5 # m/s
+    min_speed_timeout: 10.0   # seconds
+    max_speed_kmh: 100
+
+    terminal:
+      time_limit: 1000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+    display:
+      render_keys: [semantic_segmentation]
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+carla_left_turn: 
+  env:
+    world:
+      town: Town01
+    name: CarlaLeftTurnEnv-v0
+
+    action:
+      discrete: True 
+
+      discrete_acc: [0.2, 0.5]  # discrete value of accelerations
+      discrete_steer: [-0.3 ,  0.0 , 0.3] # discrete value of steering angles
+      n_commands: 3 # number of text commands
+      continuous_acc: [0.0,1.0]
+      continuous_steer: [-0.8,0.8]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+    <<: *carla_wpt
+    lane_start_points: [
+      # [293.48, 199.41, 0.0],
+      # [334.19, 307.18, 0.0],
+      # [305.15, 133.75, 0.0],
+      # [115.69, 55.37, 0.0],
+
+      [360.24, 330.95, 0.00],
+      [395.18, 41.41, 0.00],
+      # [34.23, 2.53, 0.00, 180],
+      # [-2.06, 297.74, 0.00, 180],
+      ]
+    lane_end_points: 
+      [
+        [395.18, 303.96, 0.00],
+         [370.41, 1.78, 0.00]
+      ]
+        # [[34.23, -2.53, 0.00, 180], [2.58, 31.31, 0.00, 180]],
+        # [[-2.06, 297.74, 0.00], [27.47, 330.51, 0.00]]
+
+        # [[293.48, 199.41, 0.0], [338.95, 172.01, 0.0]],
+        # [[334.19, 307.18, 0.0], [360.8, 330.23, 0.0]],
+        # [[305.15, 133.75, 0.0], [338.15, 106.12, 0.0]],
+        # [[115.69, 55.37, 0.0], [87.84, 93.59, 0.0]]
+      # ]
+
+    use_road_waypoints: [True, False]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+# CarlaEvaluationEnv
+carla_evaluation:
+  env:
+    world:
+      carla_port: 20000
+      town: "Town02" # , "Town05" , "Town04]" # which town to simulate
+      background_speed: 25
+      actor_active_distance: 100
+      fixed_delta_seconds: 0.1
+      auto_lane_change: False
+      traffic:
+        tm_seed: 2024
+
+    name: CarlaEvaluationEnv-v0
+
+    action:
+      discrete: True 
+
+      discrete_acc: [0.5, 0.7]  # discrete value of accelerations
+      discrete_steer: [-0.3 ,  0.0 , 0.3] # discrete value of steering angles
+      n_commands: 3 # number of text commands
+      continuous_acc: [0.0,1.0]
+      continuous_steer: [-0.8,0.8]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+    
+    num_vehicles: 0
+
+    max_distance: 5.0  # meters
+    min_speed_mps: 0.5 # m/s
+    min_speed_timeout: 10.0   # seconds
+    max_speed_kmh: 100
+
+    terminal:
+      time_limit: 1000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+    display:
+      render_keys: [semantic_segmentation]
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+
+carla_train:
+  env:
+    world: { town: Town01, fixed_delta_seconds: 0.1 }
+    name: CarlaTrainEnv-v0
+    stage: pretrain          # override per run
+    seed: 101
+    # Stage/town pools (indices refer to the arrays above)
+    route_pools:
+      Town01:
+        pretrain: [0,1,2]
+        finetune: [0,2]
+        calib:    [1]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion]
+    <<: *carla_wpt
+    # Optional: inline route tables; else class defaults are used
+    lane_start_points: [[113.88,199.41,0.0], [334.19,219.50,0.0], [391.86,303.89,0.0]]
+    lane_end_points:   [[293.48,199.41,0.0], [334.19,307.18,0.0], [366.13,325.66,0.0]]
+
+    num_vehicles: 10
+    use_road_waypoints: [True, False]
+    
+    
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+carla_evaluate:
+  env:
+    world: { town: Town02, fixed_delta_seconds: 0.1 }
+    name: CarlaEvaluateEnv-v0
+    stage: eval              # use eval or zero_shot
+    seed: 101
+    # Town02 tables
+    
+    EGO_SPAWN_POINT: [
+      [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0],  # Straight
+      [148.41, 306.5, 1.0,0,0,0], [-8.54,   277.57, 1.0,0,90,0], # Left Turn
+      [19.19, 302.95, 1.0,0,180,0], [-3.42, 141.02, 1.0,0,270,0], # Right Turns
+      ]
+
+    EGO_END_POINT: [
+        [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], # Straight
+        [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
+        [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0],
+    ]
+
+    route_pools:
+      Town02:
+        eval:      [0,1,2,3,4,5]
+        zero_shot: [0,1,2,3,4,5]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+
+    num_vehicles: 10
+    
+    reward:
+      desired_speed: 50 # desired speed (m/s)
+      scales:
+        {
+          waypoint: 10.0,
+          speed: 50,
+          collision: 30.0,
+          out_of_lane: 3.0,
+          time: 0.0,
+          destination_reached: 200.0,
+        }
+
+
+    terminal:
+      time_limit: 30000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+carla_evaluate01:
+  env:
+    world: { town: Town01, fixed_delta_seconds: 0.1 }
+    name: CarlaEvaluate01Env-v0
+    stage: eval              # use eval or zero_shot
+    seed: 101
+    # Town02 tables
+    
+    # LANE_START_POINTS: [[131.17, -204.71, 2.0,0,180,0]]
+
+    # LANE_END_POINTS: [[238.26, 159.83, 2.0,0,-80,0]]
+
+    EGO_SPAWN_POINT: [[113.88, 199.41, 0.0], [334.19, 219.5, 0.0],
+                         [391.86, 303.89, 0.00], [370.51, 1.85, 0.00],
+                         [360.24, 330.95, 0.00], [395.18, 41.41, 0.00],
+                    ]
+
+    EGO_END_POINT: [[293.48, 199.41, 0.0], [334.19, 307.18, 0.0],
+                       [366.13, 325.66, 0.00], [392.54, 24.48, 0.00],
+                        [395.18, 303.96, 0.00], [370.41, 1.78, 0.00]
+                    ]
+
+    route_pools:
+      Town01:
+        eval:      [0,1,2,3,4,5]
+        zero_shot: [0,1,2,3,4,5]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+
+    num_vehicles: 10
+    
+    reward:
+      desired_speed: 50 # desired speed (m/s)
+      scales:
+        {
+          waypoint: 10.0,
+          speed: 50,
+          collision: 30.0,
+          out_of_lane: 3.0,
+          time: 0.0,
+          destination_reached: 200.0,
+        }
+
+
+    terminal:
+      time_limit: 30000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]

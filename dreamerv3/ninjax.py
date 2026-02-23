@@ -430,11 +430,17 @@ class Module(metaclass=ModuleMeta):
         return value
 
     def getm(self, pattern=r".*", allow_empty=False):
+        # print("1. pattern", pattern)
         """Read the state entries of this module, optionally filtered by regex."""
         pattern = re.compile(pattern)
+        # print("2. pattern", pattern)
         prefix = self.path + "/"
+        # print("3. prefix", prefix)
         results = {}
+        # print("4. results", results)
+        # print("4a allowed empty", allow_empty)
         for key, value in context().items():
+            # print("5. context keys", key)
             if not key.startswith(prefix):
                 continue
             if pattern.match(key[len(prefix) :]):

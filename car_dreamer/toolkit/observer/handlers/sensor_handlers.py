@@ -126,10 +126,136 @@ class LidarHandler(SensorHandler):
 
 
 class CollisionHandler(SensorHandler):
+    def __init__(self, world, config):
+        super().__init__(world, config)
+        self._data = np.zeros(tuple(self._config.shape), dtype=np.float32)
+
+    def _get_observation_space(self):
+        return spaces.Box(low=0, high=np.inf, shape=tuple(self._config.shape), dtype=np.float32)
+
+    def _update_data(self, data):
+        imp = data.normal_impulse
+        val = float(np.sqrt(imp.x**2 + imp.y**2 + imp.z**2))
+        self._data = np.full(tuple(self._config.shape), val, dtype=np.float32)
+    # def _get_observation_space(self) -> spaces.Space:
+    #     return spaces.Box(low=0, high=np.inf, shape=self._config.shape, dtype=np.float32)
+
+    # def _update_data(self, data) -> None:
+    #     impulse = data.normal_impulse
+    #     collision_intensity = np.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
+    #     self._data = collision_intensity * np.ones(self._config.shape)
+
+class LaneInvasionHandler(SensorHandler):
+    def __init__(self, world, config):
+        super().__init__(world, config)
+        self._data = np.zeros(tuple(self._config.shape), dtype=np.float32)
+
+    def _get_observation_space(self):
+        return spaces.Box(low=0, high=np.inf, shape=tuple(self._config.shape), dtype=np.float32)
+
+    def _update_data(self, data):
+        self._data = np.ones(tuple(self._config.shape), dtype=np.float32)
+
+    # def _get_observation_space(self) -> spaces.Space:
+    #     shape = tuple(self._config.shape)
+    #     return spaces.Box(low=0, high=np.inf, shape=shape, dtype=np.float32)
+
+    # def _update_data(self, data) -> None:
+    #     # Update to handle lane invasion events
+    #     self._data = np.ones(tuple(self._config.shape), dtype=np.float32)
+
+# class SemanticSegmentationOneImageHandler(SensorHandler):
+#     def _get_observation_space(self) -> spaces.Space:
+#         return spaces.Box(low=0, high=255, shape=self._config.shape, dtype=np.uint8)
+
+#     def _update_data(self, data) -> None:
+#         camera_data = np.frombuffer(data.raw_data, dtype=np.uint8)
+#         camera_data = np.reshape(camera_data, (data.height, data.width, 4))
+#         camera_data = camera_data[:, :, :3]
+#         camera_data = camera_data[:, :, ::-1]
+#         self._data = camera_data
+
+class SemanticSegmentationHandler(SensorHandler):
     def _get_observation_space(self) -> spaces.Space:
-        return spaces.Box(low=0, high=np.inf, shape=self._config.shape, dtype=np.float32)
+        return spaces.Box(low=0, high=255, shape=self._config.shape, dtype=np.uint8)
 
     def _update_data(self, data) -> None:
-        impulse = data.normal_impulse
-        collision_intensity = np.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
-        self._data = collision_intensity * np.ones(self._config.shape)
+        data.convert(carla.ColorConverter.CityScapesPalette)
+        camera_data = np.frombuffer(data.raw_data, dtype=np.uint8)
+        camera_data = np.reshape(camera_data, (data.height, data.width, 4))
+        camera_data = camera_data[:, :, :3]
+        camera_data = camera_data[:, :, ::-1]
+        self._data = camera_data
+
+    # def __init__(self, world, config):
+    #     super().__init__(world, config)
+    #     from collections import deque
+    #     self._data_buffer = deque(maxlen=4)
+    #     H, W, C = self._config.shape  # C should be 12
+    #     self._data = np.zeros((H, W, C), np.uint8)
+
+    # def _get_observation_space(self):
+    #     return spaces.Box(low=0, high=255, shape=tuple(self._config.shape), dtype=np.uint8)
+
+    # def _update_data(self, data):
+    #     data.convert(carla.ColorConverter.CityScapesPalette)
+    #     frm = np.frombuffer(data.raw_data, np.uint8).reshape(data.height, data.width, 4)[:, :, :3][:, :, ::-1]
+    #     self._data_buffer.append(frm)
+    #     H, W, _ = frm.shape
+    #     frames = list(self._data_buffer)
+    #     while len(frames) < 4:
+    #         frames.insert(0, np.zeros((H, W, 3), np.uint8))
+    #     self._data = np.concatenate(frames[-4:], axis=-1)  # (H,W,12)
+
+    # def get_observation(self, _):
+    #     return {self._config.key: self._data}, {}
+
+    # def __init__(self, world: WorldManager, config):
+    #     super().__init__(world, config)
+
+    #     from collections import deque  # Import deque for frame buffer
+    #     self._data_buffer = deque(maxlen=4)  # Buffer to store the last 4 frames
+    #     self._data = np.zeros(tuple(self._config.shape), dtype=np.uint8)  # (H,W,12)
+
+    # def _get_observation_space(self) -> spaces.Space:
+    #     # Expect stacked frames along channel axis as configured (e.g., [H, W, 12])
+    #     return spaces.Box(low=0, high=255, shape=tuple(self._config.shape), dtype=np.uint8)
+
+    # def _update_data(self, data) -> None:
+    #     data.convert(carla.ColorConverter.CityScapesPalette)
+    #     # frame = np.frombuffer(data.raw_data, dtype=np.uint8)
+    #     # frame = np.reshape(frame, (data.height, data.width, 4))[:, :, :3][:, :, ::-1]
+    #     arr = np.frombuffer(data.raw_data, dtype=np.uint8).reshape(data.height, data.width, 4)[:, :, :3][:, :, ::-1]
+    #     self._data_buffer.append(arr)
+
+    #     frames = list(self._data_buffer)
+    #     while len(frames) < 4:
+    #         frames.insert(0, np.zeros_like(arr))
+    #     self._data = np.concatenate(frames[-4:], axis=-1)  # (H,W,12)
+    #     # # Keep raw 3-channel frames only in the buffer; do not expose 3-channel frames directly.
+    #     # self._data = None
+    #     # self._data_buffer.append(frame)
+
+    # def get_observation(self, env_state: Dict) -> Tuple[Dict, Dict]:
+    #     # Always return a fixed shape per config, padding with zeros if needed.
+    #     # h, w, c = tuple(self._config.shape)
+    #     # assert c % 3 == 0, "semantic_segmentation shape must be multiple of 3 in channels"
+    #     # needed = c // 3
+    #     # frames = list(self._data_buffer)[-needed:]
+    #     # if len(frames) < needed:
+    #     #     pad = [np.zeros((h, w, 3), dtype=np.uint8) for _ in range(needed - len(frames))]
+    #     #     frames = frames + pad
+    #     # stacked_frames = np.concatenate(frames, axis=-1)
+
+    #     obs = {self._config.key: self._data}
+    #     info = {}
+    #     return obs, info
+
+
+    #def visualize(self):
+        #if self._data is not None:
+        #    render_camera(self._data)  # Display the latest camera frame
+
+    #    if len(self._data_buffer) > 0:
+            # Use the latest frame in the buffer for visualization
+    #        render_camera(self._data_buffer[-1])  # Render the latest frame
