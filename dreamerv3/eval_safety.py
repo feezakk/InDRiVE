@@ -228,8 +228,12 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
         dthr = _series(ep, ep_info, ["comfort_dthrottle_abs"], n, default=0.0)
         latacc = _series(ep, ep_info, ["comfort_lat_acc_ms2"], n, default=0.0)
 
-        lane_pair = ep_info.get("lane_pair_index", ep.get("lane_pair_index", "NA"))
-        dens = ep_info.get("traffic_density", ep.get("traffic_density", "NA"))
+        # lane_pair = ep_info.get("lane_pair_index", ep.get("lane_pair_index", "NA"))
+        lp_series = _series(ep, ep_info, ["lane_pair_index"], n, default=-1)
+        lane_pair = int(lp_series[0]) if lp_series.size else -1
+        # dens = ep_info.get("traffic_density", ep.get("traffic_density", "NA"))
+        dens_series = _series(ep, ep_info, ["traffic_density"], n, default=-1)
+        dens = int(dens_series[0]) if dens_series.size else -1
 
         row = {
             "episode_index": int(eval_succ_idx["v"]),
@@ -255,8 +259,10 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
             "mean_abs_dthrottle": _safe_mean_abs(dthr),
             "mean_abs_lat_acc_ms2": _safe_mean_abs(latacc),
 
-            "lane_pair_index": lane_pair if isinstance(lane_pair, (int, float, str)) else "NA",
-            "traffic_density": dens if isinstance(dens, (int, float, str)) else "NA",
+            # "lane_pair_index": lane_pair if isinstance(lane_pair, (int, float, str)) else "NA",
+            # "traffic_density": dens if isinstance(dens, (int, float, str)) else "NA",
+            "lane_pair_index": int(lane_pair),
+            "traffic_density": int(dens),
         }
         ep_csv_w.writerow(row)
         ep_csv_f.flush()

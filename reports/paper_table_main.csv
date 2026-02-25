@@ -1,0 +1,3 @@
+task,phase,route_type,dens,method,success_rate,collision_rate,off_road_rate,out_of_lane_rate,wrong_direction_rate,too_slow_rate,time_exceeded_rate
+carla_evaluate01,zero_shot,straight,0,InDRiVE,79.0 ± 8.2,0.0 ± 0.0,0.0 ± 0.0,21.0 ± 8.2,0.0 ± 0.0,0.0 ± 0.0,0.0 ± 0.0
+carla_evaluate01,zero_shot,turn,0,InDRiVE,64.1 ± 5.1,0.0 ± 0.0,0.0 ± 0.0,35.9 ± 5.1,0.0 ± 0.0,0.0 ± 0.0,0.0 ± 0.0

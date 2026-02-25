@@ -30,6 +30,46 @@ class CarlaEvaluate03Env(RoutePoolMixin, CarlaWptEnv):
         self._pg_scale = 4
         super().__init__(config)
 
+        # ---- traffic density scheduling ----
+        def _cfg_get(key, default=None):
+            # embodied.Config supports both attribute + dict-like access depending on setup
+            if hasattr(self._config, key):
+                return getattr(self._config, key)
+            try:
+                return self._config.get(key, default)
+            except Exception:
+                return default
+
+        self.traffic_densities = list(_cfg_get("traffic_densities", []))
+        if not self.traffic_densities:
+            # fallback to fixed behavior
+            self.traffic_densities = [int(_cfg_get("num_vehicles", 0))]
+
+        self.traffic_change_steps = int(_cfg_get("traffic_change_steps", 0) or 0)
+        self.traffic_change_episodes = int(_cfg_get("traffic_change_episodes", 0) or 0)
+        self.traffic_mode = str(_cfg_get("traffic_mode", "random")).lower()
+        traffic_seed = int(_cfg_get("traffic_seed", 0) or 0)
+
+        base_seed = int(_cfg_get("seed", 0) or 0)
+        self._traffic_rng = random.Random(traffic_seed + base_seed)
+
+        # ---- route-group sampling ----
+        self.route_group = _cfg_get("route_group", None)  # e.g., "straight"
+        self.route_groups = dict(_cfg_get("route_groups", {}) or {})
+        self.route_mode = str(_cfg_get("route_mode", "random")).lower()
+        route_seed = int(_cfg_get("route_seed", 0) or 0)
+        self._route_rng = random.Random(route_seed + base_seed)
+        self._route_cycle_idx = 0
+
+        # Counters across the whole eval run
+        self._total_steps_all = 0
+        self._episodes_started = 0
+        self._next_change_step = self.traffic_change_steps if self.traffic_change_steps else None
+        self._traffic_cycle_idx = 0
+
+        # This is what you should use when spawning traffic and logging
+        self.current_vehicle_density = int(_cfg_get("num_vehicles", 0) or 0)
+
         # Speed thresholds
         self.max_distance_from_center = float(self._config.get("max_distance", 5.0))
         self.min_speed_mps = float(self._config.get("min_speed_mps", 0.5))
@@ -52,6 +92,65 @@ class CarlaEvaluate03Env(RoutePoolMixin, CarlaWptEnv):
 
         # Route pooling
         self._init_route_routing()
+
+    def _sample_lane_pair_index(self) -> int:
+        """
+        Choose a lane_pair_index for the next episode.
+        - If route_group is set (e.g., 'straight'), sample from route_groups[route_group]
+        - Else sample from all available indices (fallback)
+        """
+        # Normalize null-ish values
+        rg = self.route_group
+        if isinstance(rg, str) and rg.lower() in ("none", "null", ""):
+            rg = None
+
+        if rg is not None:
+            if rg not in self.route_groups:
+                raise KeyError(f"route_group='{rg}' not in route_groups={list(self.route_groups.keys())}")
+            candidates = list(self.route_groups[rg])
+        else:
+            # fallback: all indices
+            candidates = list(range(len(self.LANE_START_POINTS)))
+
+        if not candidates:
+            raise ValueError(f"No route candidates for route_group={rg}")
+
+        if self.route_mode == "cycle":
+            idx = candidates[self._route_cycle_idx % len(candidates)]
+            self._route_cycle_idx += 1
+            return int(idx)
+        else:
+            return int(self._route_rng.choice(candidates))
+
+    def _resample_traffic_density_if_needed(self, force: bool = False) -> None:
+        if not self.traffic_densities:
+            return
+
+        do_change = force
+
+        # Change every N episodes (episode-boundary only)
+        if (not do_change) and self.traffic_change_episodes and self._episodes_started > 0:
+            if (self._episodes_started % self.traffic_change_episodes) == 0:
+                do_change = True
+
+        # Change when crossing step thresholds (applied at next reset)
+        if (not do_change) and self.traffic_change_steps and (self._next_change_step is not None):
+            if self._total_steps_all >= self._next_change_step:
+                do_change = True
+
+        if not do_change:
+            return
+
+        if self.traffic_mode == "cycle":
+            dens = self.traffic_densities[self._traffic_cycle_idx % len(self.traffic_densities)]
+            self._traffic_cycle_idx += 1
+        else:
+            dens = self._traffic_rng.choice(self.traffic_densities)
+
+        self.current_vehicle_density = int(dens)
+
+        if self.traffic_change_steps:
+            self._next_change_step = self._total_steps_all + self.traffic_change_steps
 
     def _ensure_pygame(self, h, w):
         if self._pg_screen is None:
@@ -145,7 +244,10 @@ class CarlaEvaluate03Env(RoutePoolMixin, CarlaWptEnv):
         self._hud_slow_steps = 0
 
         # self.ego = self._world.spawn_actor()
-        self._select_lane_pair(index=self._config.get("lane_pair_index", None))
+        # self._select_lane_pair(index=self._config.get("lane_pair_index", None))
+        # pick a route index for this episode
+        route_idx = self._sample_lane_pair_index()
+        self._select_lane_pair(index=route_idx)
         assert getattr(self, "_lane_start_transform", None) is not None, "Start transform not set"
 
         self.ego = self._world.spawn_actor(transform=self._lane_start_transform)
@@ -157,7 +259,15 @@ class CarlaEvaluate03Env(RoutePoolMixin, CarlaWptEnv):
 
         self._update_spectator()
 
-        self._world.spawn_auto_actors(self._config.num_vehicles)
+        # self._world.spawn_auto_actors(self._config.num_vehicles)
+
+        # resample on episode boundaries
+        self._resample_traffic_density_if_needed(force=(self._episodes_started == 0))
+
+        self._world.spawn_auto_actors(self.current_vehicle_density)
+
+        # count episodes started
+        self._episodes_started += 1
 
         self.ego_planner = RandomPlanner(vehicle=self.ego)
         self.on_step()  # compute initial waypoints
@@ -177,4 +287,10 @@ class CarlaEvaluate03Env(RoutePoolMixin, CarlaWptEnv):
         self._offroad_steps = self._offroad_steps + 1 if self.is_off_road() else 0
 
         info["speed_norm"] = speed_ms
+
+        self._total_steps_all += 1
+
+        info["traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
+        info["lane_pair_index"] = int(getattr(self, "_lane_pair_index", -1))
+
         return obs, rew, done, info

@@ -111,96 +111,118 @@ def main():
                         raise KeyError(f"routes_json missing task '{task}'")
                     task_routes = routes[task]
 
-                    for dens in eval_densities:
-                        for route_type, route_indices in task_routes.items():
-                            for route_idx in route_indices:
-                                for seed in seeds:
-                                    ckpt = ckpt_tmpl.format(seed=seed)
-                                    ckpt_path = Path(ckpt)
-                                    if not ckpt_path.exists():
-                                        raise FileNotFoundError(f"Missing checkpoint: {ckpt}")
+                    # for dens in eval_densities:
+                    #     for route_type, route_indices in task_routes.items():
+                    #         for route_idx in route_indices:
+                    #             for seed in seeds:
+                    #                 ckpt = ckpt_tmpl.format(seed=seed)
+                    #                 ckpt_path = Path(ckpt)
+                    #                 if not ckpt_path.exists():
+                    #                     raise FileNotFoundError(f"Missing checkpoint: {ckpt}")
 
-                                    run_name = f"{task}__{method_name}__{phase}__dens{dens}__{route_type}__r{route_idx}__seed{seed}"
-                                    logdir = out_root / "runs" / run_name
-                                    logdir.mkdir(parents=True, exist_ok=True)
+                    #                 run_name = f"{task}__{method_name}__{phase}__dens{dens}__{route_type}__r{route_idx}__seed{seed}"
+                    #                 logdir = out_root / "runs" / run_name
+                    #                 logdir.mkdir(parents=True, exist_ok=True)
 
-                                    cmd = [
-                                        str(Path(args.eval_sh).resolve()),
-                                        str(args.carla_port),
-                                        str(args.gpu),
-                                        str(ckpt_path.resolve()),
-                                        run_name,
-                                        "--task", task,
-                                        "--dreamerv3.logdir", str(logdir),
+                    #                 cmd = [
+                    #                     str(Path(args.eval_sh).resolve()),
+                    #                     str(args.carla_port),
+                    #                     str(args.gpu),
+                    #                     str(ckpt_path.resolve()),
+                    #                     run_name,
+                    #                     "--task", task,
+                    #                     "--dreamerv3.logdir", str(logdir),
                                         
-                                        "--dreamerv3.run.steps", str(eval_steps),
-                                        "--env.stage", stage,
-                                        "--env.lane_pair_index", str(route_idx),
-                                        "--env.num_vehicles", str(dens),
-                                    ] + unknown
+                    #                     "--dreamerv3.run.steps", str(eval_steps),
+                    #                     "--env.stage", stage,
+                    #                     "--env.lane_pair_index", str(route_idx),
+                    #                     "--env.num_vehicles", str(dens),
+                    #                 ] + unknown
 
-                                    print("[RUN]", " ".join(cmd), flush=True)
+                    for route_type in task_routes.keys():   # now should be: straight, right, left, multi_turn
+                        for seed in seeds:
+                            ckpt = ckpt_tmpl.format(seed=seed)
+                            ckpt_path = Path(ckpt)
+                            if not ckpt_path.exists():
+                                raise FileNotFoundError(f"Missing checkpoint: {ckpt}")
+                            run_name = f"{task}__{method_name}__{phase}__{route_type}__seed{seed}"
+                            logdir = out_root / "runs" / run_name
 
-                                    env_vars = dict(os.environ)
-                                    env_vars["EVAL_EPISODES"] = str(eval_episodes)
-                                    subprocess.run(cmd, check=True, env=env_vars)
+                            cmd = [
+                                str(Path(args.eval_sh).resolve()),
+                                str(args.carla_port),
+                                str(args.gpu),
+                                str(ckpt_path.resolve()),
+                                run_name,
+                                "--task", task,
+                                "--dreamerv3.logdir", str(logdir),
+                                "--dreamerv3.run.steps", str(eval_steps),
+                                "--env.stage", stage,
+                                "--env.route_group", str(route_type),   # <<<<< this is the new control knob
+                            ] + unknown
+
+                            print("[RUN]", " ".join(cmd), flush=True)
+
+                            env_vars = dict(os.environ)
+                            env_vars["EVAL_EPISODES"] = str(eval_episodes)
+                            subprocess.run(cmd, check=True, env=env_vars)
 
 
 
-                                    # Consume per-episode CSV produced by eval script
-                                    ep_csv = logdir / "eval_episode_metrics.csv"
-                                    if not ep_csv.exists():
-                                        raise FileNotFoundError(
-                                            f"Expected {ep_csv} to exist. "
-                                            f"Your eval code must write eval_episode_metrics.csv."
-                                        )
+                            # Consume per-episode CSV produced by eval script
+                            ep_csv = logdir / "eval_episode_metrics.csv"
+                            if not ep_csv.exists():
+                                raise FileNotFoundError(
+                                    f"Expected {ep_csv} to exist. "
+                                    f"Your eval code must write eval_episode_metrics.csv."
+                                )
 
-                                    ep_rows = _read_csv_rows(ep_csv)
+                            ep_rows = _read_csv_rows(ep_csv)
 
-                                    # Write merged per-episode file with metadata columns
-                                    for r in ep_rows:
-                                        r2 = dict(r)
-                                        r2.update({
-                                            "method": method_name,
-                                            "phase": phase,
-                                            "route_type": route_type,
-                                            "route_idx": str(route_idx),
-                                            "seed": str(seed),
-                                            "checkpoint": str(ckpt_path),
-                                            "logdir": str(logdir),
-                                            "task": task,
-                                            "traffic_density": str(dens),
-                                        })
-                                        if merged_writer is None:
-                                            merged_writer = csv.DictWriter(merged_f, fieldnames=list(r2.keys()))
-                                            if not merged_fields_written:
-                                                merged_writer.writeheader()
-                                                merged_fields_written = True
-                                        merged_writer.writerow(r2)
-                                    merged_f.flush()
+                            # Write merged per-episode file with metadata columns
+                            for r in ep_rows:
+                                r2 = dict(r)
+                                r2.update({
+                                    "method": method_name,
+                                    "phase": phase,
+                                    "route_type": route_type,
+                                    # "route_idx": str(route_idx),
+                                    "seed": str(seed),
+                                    "checkpoint": str(ckpt_path),
+                                    "logdir": str(logdir),
+                                    "task": task,
+                                    # "traffic_density": str(dens),
+                                })
+                                if merged_writer is None:
+                                    merged_writer = csv.DictWriter(merged_f, fieldnames=list(r2.keys()))
+                                    if not merged_fields_written:
+                                        merged_writer.writeheader()
+                                        merged_fields_written = True
+                                merged_writer.writerow(r2)
+                            merged_f.flush()
 
-                                    # Write per-run summary row
-                                    summ = _summarize_episode_csv(ep_rows)
-                                    summ_row = {
-                                        "method": method_name,
-                                        "phase": phase,
-                                        "route_type": route_type,
-                                        "route_idx": int(route_idx),
-                                        "seed": int(seed),
-                                        "checkpoint": str(ckpt_path),
-                                        "logdir": str(logdir),
-                                        "task": task,
-                                        "traffic_density": int(dens),
-                                        **summ,
-                                    }
-                                    all_summary_rows.append(summ_row)
-                                    if summary_writer is None:
-                                        summary_writer = csv.DictWriter(summary_f, fieldnames=list(summ_row.keys()))
-                                        if not summary_fields_written:
-                                            summary_writer.writeheader()
-                                            summary_fields_written = True
-                                    summary_writer.writerow(summ_row)
-                                    summary_f.flush()
+                            # Write per-run summary row
+                            summ = _summarize_episode_csv(ep_rows)
+                            summ_row = {
+                                "method": method_name,
+                                "phase": phase,
+                                "route_type": route_type,
+                                # "route_idx": int(route_idx),
+                                "seed": int(seed),
+                                "checkpoint": str(ckpt_path),
+                                "logdir": str(logdir),
+                                "task": task,
+                                # "traffic_density": int(dens),
+                                **summ,
+                            }
+                            all_summary_rows.append(summ_row)
+                            if summary_writer is None:
+                                summary_writer = csv.DictWriter(summary_f, fieldnames=list(summ_row.keys()))
+                                if not summary_fields_written:
+                                    summary_writer.writeheader()
+                                    summary_fields_written = True
+                            summary_writer.writerow(summ_row)
+                            summary_f.flush()
 
         print(f"[DONE] Wrote: {merged_episode_csv} and {summary_csv}")
 

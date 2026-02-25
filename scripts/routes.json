@@ -1,22 +1,26 @@
 {
   "carla_evaluate01": {
     "straight": [0, 1],
-    "turn": [2, 3, 4, 5],
+    "right": [2, 3],
+    "left": [4, 5],
     "multi_turn": [6, 7]
   },
   "carla_evaluate": {
     "straight": [0, 1],
-    "turn": [2, 3, 4, 5],
+    "right": [4, 5],
+    "left": [2, 3],
     "multi_turn": [6, 7]
   },
   "carla_evaluate03": {
     "straight": [0, 1],
-    "turn": [2, 3, 4, 5],
+    "right": [2, 3],
+    "left": [4, 5],
     "multi_turn": [6, 7]
   },
   "carla_evaluate04": {
     "straight": [0, 1],
-    "turn": [2, 3, 4, 5],
+    "right": [2, 3],
+    "left": [4, 5],
     "multi_turn": [6, 7]
   }
 }

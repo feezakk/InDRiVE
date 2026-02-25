@@ -692,7 +692,25 @@ carla_evaluate:
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 
-    num_vehicles: 10
+    # Initial value (used only for episode 0 before first resample, or if schedule disabled)
+    num_vehicles: 0
+
+    # NEW: traffic density schedule
+    traffic_densities: [0, 5, 10, 20, 30, 40]
+    traffic_change_steps: 10000       # resample trigger based on total eval steps
+    traffic_change_episodes: 5        # resample trigger based on episode count
+    traffic_mode: random              # "random" or "cycle"
+    traffic_seed: 0                   # reproducible resampling
+
+    # Route sampling within a family (one family per run)
+    route_group: null  # one of: straight, right, left, multi_turn (or null = any)
+    route_groups:
+      straight: [0, 1]
+      right: [2, 3]
+      left: [4, 5]
+      multi_turn: [6, 7]
+    route_mode: random   # random or cycle (within the family)
+    route_seed: 0
     
     reward:
       desired_speed: 50 # desired speed (m/s)
@@ -766,7 +784,25 @@ carla_evaluate01:
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 
-    num_vehicles: 10
+    # Initial value (used only for episode 0 before first resample, or if schedule disabled)
+    num_vehicles: 0
+
+    # NEW: traffic density schedule
+    traffic_densities: [0, 5, 10, 20, 30, 40]
+    traffic_change_steps: 10000       # resample trigger based on total eval steps
+    traffic_change_episodes: 5        # resample trigger based on episode count
+    traffic_mode: random              # "random" or "cycle"
+    traffic_seed: 0                   # reproducible resampling
+
+    # Route sampling within a family (one family per run)
+    route_group: null  # one of: straight, right, left, multi_turn (or null = any)
+    route_groups:
+      straight: [0, 1]
+      right: [2, 3]
+      left: [4, 5]
+      multi_turn: [6, 7]
+    route_mode: random   # random or cycle (within the family)
+    route_seed: 0
     
     reward:
       desired_speed: 50 # desired speed (m/s)
@@ -840,7 +876,25 @@ carla_evaluate03:
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 
-    num_vehicles: 10
+    # Initial value (used only for episode 0 before first resample, or if schedule disabled)
+    num_vehicles: 0
+
+    # NEW: traffic density schedule
+    traffic_densities: [0, 5, 10, 20, 30, 40]
+    traffic_change_steps: 10000       # resample trigger based on total eval steps
+    traffic_change_episodes: 5        # resample trigger based on episode count
+    traffic_mode: random              # "random" or "cycle"
+    traffic_seed: 0                   # reproducible resampling
+
+    # Route sampling within a family (one family per run)
+    route_group: null  # one of: straight, right, left, multi_turn (or null = any)
+    route_groups:
+      straight: [0, 1]
+      right: [2, 3]
+      left: [4, 5]
+      multi_turn: [6, 7]
+    route_mode: random   # random or cycle (within the family)
+    route_seed: 0
     
     reward:
       desired_speed: 50 # desired speed (m/s)
@@ -915,7 +969,25 @@ carla_evaluate04:
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 
-    num_vehicles: 10
+    # Initial value (used only for episode 0 before first resample, or if schedule disabled)
+    num_vehicles: 0
+
+    # NEW: traffic density schedule
+    traffic_densities: [0, 5, 10, 20, 30, 40]
+    traffic_change_steps: 10000       # resample trigger based on total eval steps
+    traffic_change_episodes: 5        # resample trigger based on episode count
+    traffic_mode: random              # "random" or "cycle"
+    traffic_seed: 0                   # reproducible resampling
+
+    # Route sampling within a family (one family per run)
+    route_group: null  # one of: straight, right, left, multi_turn (or null = any)
+    route_groups:
+      straight: [0, 1]
+      right: [2, 3]
+      left: [4, 5]
+      multi_turn: [6, 7]
+    route_mode: random   # random or cycle (within the family)
+    route_seed: 0
     
     reward:
       desired_speed: 50 # desired speed (m/s)
