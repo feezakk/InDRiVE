@@ -1,0 +1,22 @@
+{
+  "carla_evaluate01": {
+    "straight": [0, 1],
+    "turn": [2, 3, 4, 5],
+    "multi_turn": [6, 7]
+  },
+  "carla_evaluate": {
+    "straight": [0, 1],
+    "turn": [2, 3, 4, 5],
+    "multi_turn": [6, 7]
+  },
+  "carla_evaluate03": {
+    "straight": [0, 1],
+    "turn": [2, 3, 4, 5],
+    "multi_turn": [6, 7]
+  },
+  "carla_evaluate04": {
+    "straight": [0, 1],
+    "turn": [2, 3, 4, 5],
+    "multi_turn": [6, 7]
+  }
+}

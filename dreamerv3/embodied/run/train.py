@@ -95,7 +95,16 @@ def train(agent, env, replay, shield, logger, args):
         try:
             train_csv_path = str(logdir / "train_steps.csv")
             train_csv_file = open(train_csv_path, "w", newline="")
-            fieldnames = ["step", "env_step", "reward", "unsafe", "action"]
+            # fieldnames = ["step", "env_step", "reward", "unsafe", "action"]
+            fieldnames = [
+                "step", "env_step", "reward", "unsafe",
+                "action",
+                "speed_ms",
+                "comfort_acc_ms2", "comfort_jerk_ms3",
+                "comfort_dsteer_abs", "comfort_dthrottle_abs",
+                "comfort_lat_acc_ms2",
+                "traffic_density",
+            ]
             train_csv_writer = csv.DictWriter(train_csv_file, fieldnames=fieldnames)
             train_csv_writer.writeheader()
         except Exception:
@@ -155,19 +164,38 @@ def train(agent, env, replay, shield, logger, args):
         return pick_tau(pp, yy, target_fpr)
     
 
-    # ---------- CSV writers (NEW) ----------
-    def _make_writer(path):
+    def _make_writer(path, fieldnames):
         path = embodied.Path(path)
         exists = path.exists()
         f = open(str(path), "a", newline="")
-        fieldnames = [
-            "episode_index","env_step","length","return",
-            "is_collision", "out_of_lane", "destination_reached", "wrong_direction", "too_slow", "off_road" 
-        ]
         w = csv.DictWriter(f, fieldnames=fieldnames)
         if not exists:
-            w.writeheader(); f.flush()
+            w.writeheader()
+            f.flush()
         return f, w
+
+    EP_FIELDS = [
+        "episode_index", "env_step", "length", "return",
+
+        # outcome flags (failure breakdown)
+        "success",
+        "collision", "off_road", "out_of_lane", "wrong_direction", "too_slow", "time_exceeded", "destination_reached",
+
+        # speed tracking (reviewer request)
+        "mean_speed_ms", "std_speed_ms",
+
+        # comfort/smoothness (reviewer request)
+        "mean_abs_acc_ms2", "mean_abs_jerk_ms3",
+        "mean_abs_dsteer", "mean_abs_dthrottle",
+        "mean_abs_lat_acc_ms2",
+
+        # optional context (only if present in info; will be NA otherwise)
+        "lane_pair_index", "traffic_density",
+    ]
+
+    train_csv_f, train_csv_w = _make_writer(logdir / "train_episode_metrics.csv", EP_FIELDS)
+    atexit.register(lambda: train_csv_f.close())
+    train_ep_idx = {"v": 0}
 
     train_csv_f, train_csv_w = _make_writer(logdir / "train_success.csv")
     eval_csv_f,  eval_csv_w  = _make_writer(logdir / "eval_success.csv")
@@ -175,30 +203,104 @@ def train(agent, env, replay, shield, logger, args):
     train_ep_idx = {"v": 0}
     eval_ep_idx  = {"v": 0}
 
-    def _csv_log(ep, ep_info, is_eval=False):
-        # Episode stats
+    def _any_key(ep, ep_info, keys):
+        for k in keys:
+            if k in ep_info:
+                v = np.asarray(ep_info[k])
+                if v.size and np.any(v):
+                    return True
+            if k in ep:
+                v = np.asarray(ep[k])
+                if v.size and np.any(v):
+                    return True
+        return False
+
+    def _series(ep, ep_info, keys, n, default=0.0):
+        for k in keys:
+            if k in ep:
+                return _align_len(ep[k], n).astype(np.float32)
+            if k in ep_info:
+                return _align_len(ep_info[k], n).astype(np.float32)
+        return np.full((n,), float(default), np.float32)
+
+    def _safe_mean_abs(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.mean(np.abs(x))) if x.size else 0.0
+
+    def _safe_mean(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.mean(x)) if x.size else 0.0
+
+    def _safe_std(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.std(x)) if x.size else 0.0
+
+    def _csv_log(ep, ep_info):
         length = int(len(ep["reward"]) - 1)
         ret = float(ep["reward"].astype(np.float64).sum())
-        def _any(k):  # handles missing keys
-            v = ep_info.get(k, [])
-            return bool(np.any(np.array(v)))
+        n = max(1, length)  # avoid zero-length
+
+        collision = int(_any_key(ep, ep_info, ["is_collision", "collision"]))
+        off_road = int(_any_key(ep, ep_info, ["is_off_road", "off_road"]))
+        out_of_lane = int(_any_key(ep, ep_info, ["out_of_lane", "lane_invasion", "offlane"]))
+        wrong_direction = int(_any_key(ep, ep_info, ["is_wrong_direction", "wrong_direction"]))
+        too_slow = int(_any_key(ep, ep_info, ["too_slow", "not_moving"]))
+        time_exceeded = int(_any_key(ep, ep_info, ["time_exceeded"]))
+        destination_reached = int(_any_key(ep, ep_info, ["is_destination_reached", "destination_reached", "goal_reached"]))
+
+        success = int(
+            (destination_reached == 1)
+            and (collision == 0)
+            and (off_road == 0)
+            and (out_of_lane == 0)
+            and (wrong_direction == 0)
+            and (too_slow == 0)
+            and (time_exceeded == 0)
+        )
+
+        # Per-step series for comfort/speed (these are added in env.step in §1/§2)
+        speed_ms = _series(ep, ep_info, ["speed_ms", "speed_norm"], n, default=0.0)
+        acc_ms2 = _series(ep, ep_info, ["comfort_acc_ms2"], n, default=0.0)
+        jerk_ms3 = _series(ep, ep_info, ["comfort_jerk_ms3"], n, default=0.0)
+        dsteer = _series(ep, ep_info, ["comfort_dsteer_abs"], n, default=0.0)
+        dthr = _series(ep, ep_info, ["comfort_dthrottle_abs"], n, default=0.0)
+        latacc = _series(ep, ep_info, ["comfort_lat_acc_ms2"], n, default=0.0)
+
+        # Context (optional)
+        lane_pair = ep_info.get("lane_pair_index", ep.get("lane_pair_index", "NA"))
+        dens = ep_info.get("traffic_density", ep.get("traffic_density", "NA"))
+
         row = {
-            "episode_index": (eval_ep_idx["v"] if is_eval else train_ep_idx["v"]),
+            "episode_index": int(train_ep_idx["v"]),
             "env_step": int(logger.step),
-            "length": length,
-            "return": ret,
-            "is_collision": int(_any("is_collision")),
-            "out_of_lane": int(_any("out_of_lane")),
-            "destination_reached": int(_any("destination_reached")),
-            "wrong_direction": int(_any("wrong_direction")),
-            "too_slow": int(_any("too_slow")),
-            "off_road": int(_any("off_road")),
+            "length": int(length),
+            "return": float(ret),
+
+            "success": int(success),
+            "collision": int(collision),
+            "off_road": int(off_road),
+            "out_of_lane": int(out_of_lane),
+            "wrong_direction": int(wrong_direction),
+            "too_slow": int(too_slow),
+            "time_exceeded": int(time_exceeded),
+            "destination_reached": int(destination_reached),
+
+            "mean_speed_ms": _safe_mean(speed_ms),
+            "std_speed_ms": _safe_std(speed_ms),
+
+            "mean_abs_acc_ms2": _safe_mean_abs(acc_ms2),
+            "mean_abs_jerk_ms3": _safe_mean_abs(jerk_ms3),
+            "mean_abs_dsteer": _safe_mean_abs(dsteer),
+            "mean_abs_dthrottle": _safe_mean_abs(dthr),
+            "mean_abs_lat_acc_ms2": _safe_mean_abs(latacc),
+
+            "lane_pair_index": lane_pair if isinstance(lane_pair, (int, float, str)) else "NA",
+            "traffic_density": dens if isinstance(dens, (int, float, str)) else "NA",
         }
-        w, f = (eval_csv_w, eval_csv_f) if is_eval else (train_csv_w, train_csv_f)
-        w.writerow(row); f.flush()
-        if is_eval: eval_ep_idx["v"] += 1
-        else:       train_ep_idx["v"] += 1
-    # ---------------------------------------
+
+        train_csv_w.writerow(row)
+        train_csv_f.flush()
+        train_ep_idx["v"] += 1
 
         
 
@@ -467,8 +569,10 @@ def train(agent, env, replay, shield, logger, args):
 
     driver = embodied.Driver(env)
     driver.on_episode(lambda ep, ep_info, worker: per_episode(ep,ep_info))
-    driver.on_episode(lambda ep, ep_info, worker: _csv_log(ep, ep_info, is_eval=False))
+    driver.on_episode(lambda ep, ep_info, worker: _csv_log(ep, ep_info))
+    # driver.on_episode(lambda ep, ep_info, worker: _csv_log(ep, ep_info, is_eval=False))
     driver.on_step(lambda _, __, ___: step.increment())
+    
     def penalise_and_store(tran, _, worker):
         # Ensure action has consistent 1D shape across steps (e.g., (54,)).
         if "action" in tran:
@@ -512,6 +616,14 @@ def train(agent, env, replay, shield, logger, args):
                     "reward": float(np.asarray(tran.get("reward", 0.0)).reshape(-1)[0]) if "reward" in tran else 0.0,
                     "unsafe": float(np.asarray(tran.get("unsafe", 0.0)).reshape(-1)[0]) if "unsafe" in tran else 0.0,
                     "action": tran.get("action").tolist() if hasattr(tran.get("action"), "tolist") else str(tran.get("action")),
+
+                    "speed_ms": float(np.asarray(tran.get("speed_ms", 0.0)).reshape(-1)[0]) if "speed_ms" in tran else 0.0,
+                    "comfort_acc_ms2": float(np.asarray(tran.get("comfort_acc_ms2", 0.0)).reshape(-1)[0]) if "comfort_acc_ms2" in tran else 0.0,
+                    "comfort_jerk_ms3": float(np.asarray(tran.get("comfort_jerk_ms3", 0.0)).reshape(-1)[0]) if "comfort_jerk_ms3" in tran else 0.0,
+                    "comfort_dsteer_abs": float(np.asarray(tran.get("comfort_dsteer_abs", 0.0)).reshape(-1)[0]) if "comfort_dsteer_abs" in tran else 0.0,
+                    "comfort_dthrottle_abs": float(np.asarray(tran.get("comfort_dthrottle_abs", 0.0)).reshape(-1)[0]) if "comfort_dthrottle_abs" in tran else 0.0,
+                    "comfort_lat_acc_ms2": float(np.asarray(tran.get("comfort_lat_acc_ms2", 0.0)).reshape(-1)[0]) if "comfort_lat_acc_ms2" in tran else 0.0,
+                    "traffic_density": int(np.asarray(tran.get("traffic_density", -1)).reshape(-1)[0]) if "traffic_density" in tran else -1,
                 }
                 train_csv_writer.writerow(row)
                 train_csv_file.flush()

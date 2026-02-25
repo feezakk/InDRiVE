@@ -9,6 +9,12 @@ fi
 # Configuration
 CARLA_PORT=$1
 GPU_DEVICE=$2
+LOOP=0
+if [ "$3" == "--loop" ]; then
+  LOOP=1
+  shift  # remove --loop
+fi
+ADDITIONAL_PARAMS="${@:3}"
 LOG_FILE="log_${CARLA_PORT}.log"
 CARLA_SERVER_COMMAND="$CARLA_ROOT/CarlaUE4.sh -carla-port=$CARLA_PORT -benchmark -fps=10"
 TRAINING_SCRIPT="dreamerv3.train"
@@ -79,14 +85,18 @@ log_with_timestamp "Starting training on port $CARLA_PORT..."
 log_with_timestamp "Training command: $TRAINING_COMMAND"
 start_training
 
-while true; do
-    # Check if the training script is still running
+if [ $LOOP -eq 1 ]; then
+  while true; do
     if ! pgrep -f "$TRAINING_SCRIPT" > /dev/null; then
-        log_with_timestamp "Training script crashed on port $CARLA_PORT. Restarting..."
-        start_training
+      log_with_timestamp "Training script crashed on port $CARLA_PORT. Restarting..."
+      start_training
     fi
-    # Check if CARLA server needs to be restarted
     launch_carla
-    # Check every minute
     sleep 60
-done
+  done
+else
+  # run once: wait for training to finish and exit
+  wait $TRAINING_PID
+  log_with_timestamp "Training finished on port $CARLA_PORT."
+  exit 0
+fi

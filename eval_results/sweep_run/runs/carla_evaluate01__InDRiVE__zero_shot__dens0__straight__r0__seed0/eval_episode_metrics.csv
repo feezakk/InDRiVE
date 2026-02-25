@@ -1,0 +1,5 @@
+episode_index,env_step,length,return,success,collision,off_road,out_of_lane,wrong_direction,too_slow,time_exceeded,destination_reached,mean_speed_ms,std_speed_ms,mean_abs_acc_ms2,mean_abs_jerk_ms3,mean_abs_dsteer,mean_abs_dthrottle,mean_abs_lat_acc_ms2,lane_pair_index,traffic_density
+1,18764,18763,74549.79675612539,1,0,0,0,0,0,0,1,0.0955554058049473,0.07201207481201242,0.0,0.0,0.0,0.0,0.0,NA,NA
+2,38037,19272,74807.87904764258,1,0,0,0,0,0,0,1,0.09301103635491417,0.06925441279702846,0.0,0.0,0.0,0.0,0.0,NA,NA
+3,39707,1669,75676.90511131467,1,0,0,0,0,0,0,1,1.0743661246538887,0.10975876777425332,0.0,0.0,0.0,0.0,0.0,NA,NA
+4,40145,437,85566.97286825813,1,0,0,0,0,0,0,1,4.080532173103821,0.8977384920766946,0.0,0.0,0.0,0.0,0.0,NA,NA

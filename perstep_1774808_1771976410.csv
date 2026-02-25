@@ -1,0 +1,1 @@
+env_step,episode_step,reward,done,r_waypoints,r_speed,r_collision,r_out_of_lane,r_destination,time_penalty,r_progress,r_overspeed,r_ttc,is_collision,out_of_lane,is_off_road,is_wrong_direction,too_slow,time_exceeded,is_destination_reached,speed_kmh,wpt_dis,ttc,lat_err,lane_width

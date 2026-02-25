@@ -1,20 +1,16 @@
-carla_wpt:
-  &carla_wpt # It's a base configuration for wpt tasks, don't use it directly
+carla_wpt: &carla_wpt  # base configuration for wpt tasks, don't use it directly
   reward:
-    desired_speed: 4 # desired speed (m/s)
+    desired_speed: 4
     scales:
-      {
-        waypoint: 2.0,
-        speed: 0.5,
-        collision: 30.0,
-        out_of_lane: 3.0,
-        time: 0.0,
-        destination_reached: 20.0,
-      }
+      waypoint: 2.0
+      speed: 0.5
+      collision: 30.0
+      out_of_lane: 3.0
+      time: 0.0
+      destination_reached: 20.0
   terminal:
-    time_limit: 20000 # maximum timesteps per episode
-    out_lane_thres: 1.0 # threshold for out of lane
-
+    time_limit: 20000
+    out_lane_thres: 1.0
     wrong_dir_angle_deg: 120.0
     wrong_dir_min_speed: 0.5
     wrong_dir_duration: 1
@@ -658,24 +654,41 @@ carla_evaluate:
     name: CarlaEvaluateEnv-v0
     stage: eval              # use eval or zero_shot
     seed: 101
+    lane_pair_index: null
     # Town02 tables
     
     EGO_SPAWN_POINT: [
-      [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0],  # Straight
+      [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0], #Straight
       [148.41, 306.5, 1.0,0,0,0], [-8.54,   277.57, 1.0,0,90,0], # Left Turn
       [19.19, 302.95, 1.0,0,180,0], [-3.42, 141.02, 1.0,0,270,0], # Right Turns
-      ]
+      [16.98, 106.46, 1.0,0,180,0], [-7.82, 282.72, 1.0,0,90,0], #Two Turns  
+    ]
 
     EGO_END_POINT: [
-        [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], # Straight
-        [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
-        [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0],
+      [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], #Straight
+      [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
+      [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0], # Right Turns
+      [13.05, 306.95, 1.0,0,0,0], [193.49, 287.6, 1.0,0,270,0], #Two Turns
+    ]
+
+    lane_start_points: [
+      [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0], #Straight
+      [148.41, 306.5, 1.0,0,0,0], [-8.54,   277.57, 1.0,0,90,0], # Left Turn
+      [19.19, 302.95, 1.0,0,180,0], [-3.42, 141.02, 1.0,0,270,0], # Right Turns
+      [16.98, 106.46, 1.0,0,180,0], [-7.82, 282.72, 1.0,0,90,0], #Two Turns  
+    ]
+
+    lane_end_points: [
+      [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], #Straight
+      [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
+      [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0], # Right Turns
+      [13.05, 306.95, 1.0,0,0,0], [193.49, 287.6, 1.0,0,270,0], #Two Turns
     ]
 
     route_pools:
       Town02:
-        eval:      [0,1,2,3,4,5]
-        zero_shot: [0,1,2,3,4,5]
+        eval:      [0,1,2,3,4,5,6,7]
+        zero_shot: [0,1,2,3,4,5,6,7]
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 
@@ -715,26 +728,190 @@ carla_evaluate01:
     name: CarlaEvaluate01Env-v0
     stage: eval              # use eval or zero_shot
     seed: 101
+    lane_pair_index: null
     # Town02 tables
-    
-    # LANE_START_POINTS: [[131.17, -204.71, 2.0,0,180,0]]
 
-    # LANE_END_POINTS: [[238.26, 159.83, 2.0,0,-80,0]]
+    EGO_SPAWN_POINT: [
+      [113.88, 199.41, 1.0,0,0,0], [334.19, 219.5, 1.0,0,90,0], #straight
+      [391.86, 303.89, 1.00,0,90,0], [370.51, 1.85, 1.00,0,0,0], #right
+      [360.24, 330.95, 1.00,0,0,0], [360.24, 330.95, 1.00,0,0,0], #left
+      [371.15, 330.89, 1.00,0,0,0], [371.15, 330.89, 1.00,0,0,0], #multi
+    ]
 
-    EGO_SPAWN_POINT: [[113.88, 199.41, 0.0], [334.19, 219.5, 0.0],
-                         [391.86, 303.89, 0.00], [370.51, 1.85, 0.00],
-                         [360.24, 330.95, 0.00], [395.18, 41.41, 0.00],
-                    ]
+    EGO_END_POINT: [
+      [293.48, 199.41, 1.0,0,0,0], [334.19, 307.18, 1.0,0,90,0], #straight
+      [366.13, 325.66, 1.00,0,180,0], [392.54, 24.48, 1.00,0,90,0], #right
+      [395.18, 303.96, 1.00,0,270,0], [395.18, 303.96, 1.00,0,270,0], #left
+      [376.03, -1.1, 1.00,0,180,0], [376.03, -1.1, 1.00,0,180,0] #multi
+    ]
 
-    EGO_END_POINT: [[293.48, 199.41, 0.0], [334.19, 307.18, 0.0],
-                       [366.13, 325.66, 0.00], [392.54, 24.48, 0.00],
-                        [395.18, 303.96, 0.00], [370.41, 1.78, 0.00]
-                    ]
+    lane_start_points: [
+      [113.88, 199.41, 1.0,0,0,0], [334.19, 219.5, 1.0,0,90,0], #straight
+      [391.86, 303.89, 1.00,0,90,0], [370.51, 1.85, 1.00,0,0,0], #right
+      [360.24, 330.95, 1.00,0,0,0], [360.24, 330.95, 1.00,0,0,0], #left
+      [371.15, 330.89, 1.00,0,0,0], [371.15, 330.89, 1.00,0,0,0], #multi
+    ]
+
+    lane_end_points: [
+      [293.48, 199.41, 1.0,0,0,0], [334.19, 307.18, 1.0,0,90,0], #straight
+      [366.13, 325.66, 1.00,0,180,0], [392.54, 24.48, 1.00,0,90,0], #right
+      [395.18, 303.96, 1.00,0,270,0], [395.18, 303.96, 1.00,0,270,0], #left
+      [376.03, -1.1, 1.00,0,180,0], [376.03, -1.1, 1.00,0,180,0] #multi
+    ]
 
     route_pools:
       Town01:
-        eval:      [0,1,2,3,4,5]
-        zero_shot: [0,1,2,3,4,5]
+        eval:      [0,1,2,3,4,5,6,7]
+        zero_shot: [0,1,2,3,4,5,6,7]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+
+    num_vehicles: 10
+    
+    reward:
+      desired_speed: 50 # desired speed (m/s)
+      scales:
+        {
+          waypoint: 10.0,
+          speed: 50,
+          collision: 30.0,
+          out_of_lane: 3.0,
+          time: 0.0,
+          destination_reached: 200.0,
+        }
+
+
+    terminal:
+      time_limit: 30000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+carla_evaluate03:
+  env:
+    world: { town: Town03, fixed_delta_seconds: 0.1 }
+    name: CarlaEvaluate03Env-v0
+    stage: eval              # use eval or zero_shot
+    seed: 101
+    lane_pair_index: null
+
+    EGO_SPAWN_POINT: [
+      [-89.15, -120.18, 0.14, 0, 90, 0], [25.11, 204.55, 1, 0, 0, 0], #S 
+      [-144.95, -35.25, 0.5, 0, 270, 0], [227.49, 143.70, 1.5, 0, 90, 0], #R
+      [55.70, 207.54, 1, 0, 0, 0], [39.26, 134.22, 1.0, 0, 0, 0], #L
+      [-144.95, -35.25, 0.5, 0, 270, 0], [227.49, 143.70, 1.5, 0, 90, 0], #M
+      ]
+
+    EGO_END_POINT: [
+      [-88.81, -17.66, 0.14, 0, 90, 0], [143.11, 204.55, 2.5, 0, 0, 0], #S
+      [-106.68, -137.17, 1.33, 0, 0, 0], [-24.98, -198.17, 1.0, 0, 0, 0], #R
+      [239.00, 154.38, 2.39, 0, 290, 0], [168.64, 104.85, 1.31, 0, 285, 0], #L
+      [-106.68, -137.17, 1.33, 0, 0, 0], [-24.98, -198.17, 1.0, 0, 0, 0], #M
+    ]
+
+    lane_start_points: [
+      [-89.15, -120.18, 0.14, 0, 90, 0], [25.11, 204.55, 1, 0, 0, 0], #S 
+      [-144.95, -35.25, 0.5, 0, 270, 0], [227.49, 143.70, 1.5, 0, 90, 0], #R
+      [55.70, 207.54, 1, 0, 0, 0], [39.26, 134.22, 1.0, 0, 0, 0], #L
+      [-144.95, -35.25, 0.5, 0, 270, 0], [227.49, 143.70, 1.5, 0, 90, 0], #M
+      ]
+
+    lane_end_points: [
+      [-88.81, -17.66, 0.14, 0, 90, 0], [143.11, 204.55, 2.5, 0, 0, 0], #S
+      [-106.68, -137.17, 1.33, 0, 0, 0], [-24.98, -198.17, 1.0, 0, 0, 0], #R
+      [239.00, 154.38, 2.39, 0, 290, 0], [168.64, 104.85, 1.31, 0, 285, 0], #L
+      [-106.68, -137.17, 1.33, 0, 0, 0], [-24.98, -198.17, 1.0, 0, 0, 0], #M
+    ]
+
+
+    route_pools:
+      Town03:
+        eval:      [0,1,2,3,4,5,6,7]
+        zero_shot: [0,1,2,3,4,5,6,7]
+
+    observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
+
+    num_vehicles: 10
+    
+    reward:
+      desired_speed: 50 # desired speed (m/s)
+      scales:
+        {
+          waypoint: 10.0,
+          speed: 50,
+          collision: 30.0,
+          out_of_lane: 3.0,
+          time: 0.0,
+          destination_reached: 200.0,
+        }
+
+
+    terminal:
+      time_limit: 30000 # maximum timesteps per episode
+      out_lane_thres: 3 # threshold for out of lane
+
+  dreamerv2:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_kernels: [5, 5, 5, 6, 6]
+    train.log_keys_video: [semantic_segmentation]
+
+  dreamerv3:
+    encoder.cnn_keys: "semantic_segmentation"
+    decoder.cnn_keys: "semantic_segmentation"
+    run.log_keys_video: [semantic_segmentation]
+
+carla_evaluate04:
+  env:
+    world: { town: Town04, fixed_delta_seconds: 0.1 }
+    name: CarlaEvaluate04Env-v0
+    stage: eval              # use eval or zero_shot
+    seed: 101
+    lane_pair_index: null
+
+    EGO_SPAWN_POINT: [
+      [-350.19, 33.68, 0.0, 0, 0, 0], [-124.33, 9.56, 8.46, 0, 180, 0], #S
+      [277.78, -365.03, 0.0, 0, 10.75, 0], [34.23, -299.55, 0.0, 0, -57.86, 0], #R
+      [-185.12, 432.08, 0.0, 0, 0, 0], [288.38, 37.73, 2.06, 0, 1.02, 0], #L
+      [-185.12, 432.08, 0.0, 0, 0, 0], [288.38, 37.73, 2.06, 0, 1.02, 0], #M
+    ]
+
+    EGO_END_POINT: [
+      [-240.41, 33.62, 2.71, 0, 0, 0], [-239.00, 9.12, 2.77, 0, 180, 0], #S
+      [373.85, -288.92, 0.0, 0, 65.06, 0], [111.44, -360.14, 0.0, 0, -21.83, 0], #R
+      [-84.72, 398.98, 0.0, 0, -32.07, 0], [389.61, 18.68, 0.01, 0, -44.66, 0], #L
+      [-84.72, 398.98, 0.0, 0, -32.07, 0], [389.61, 18.68, 0.01, 0, -44.66, 0], #M
+    ]
+
+    lane_start_points: [
+      [-350.19, 33.68, 0.0, 0, 0, 0], [-124.33, 9.56, 8.46, 0, 180, 0], #S
+      [277.78, -365.03, 0.0, 0, 10.75, 0], [34.23, -299.55, 0.0, 0, -57.86, 0], #R
+      [-185.12, 432.08, 0.0, 0, 0, 0], [288.38, 37.73, 2.06, 0, 1.02, 0], #L
+      [-185.12, 432.08, 0.0, 0, 0, 0], [288.38, 37.73, 2.06, 0, 1.02, 0], #M
+    ]
+
+    lane_end_points: [
+      [-240.41, 33.62, 2.71, 0, 0, 0], [-239.00, 9.12, 2.77, 0, 180, 0], #S
+      [373.85, -288.92, 0.0, 0, 65.06, 0], [111.44, -360.14, 0.0, 0, -21.83, 0], #R
+      [-84.72, 398.98, 0.0, 0, -32.07, 0], [389.61, 18.68, 0.01, 0, -44.66, 0], #L
+      [-84.72, 398.98, 0.0, 0, -32.07, 0], [389.61, 18.68, 0.01, 0, -44.66, 0], #M
+    ]
+
+    
+
+    route_pools:
+      Town04:
+        eval:      [0,1,2,3,4,5,6,7]
+        zero_shot: [0,1,2,3,4,5,6,7]
 
     observation.enabled: [semantic_segmentation , collision , lane_invasion, lane_invasion_raw]
 

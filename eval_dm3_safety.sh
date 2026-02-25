@@ -1,20 +1,21 @@
 #!/bin/bash
 
-# Check if a port argument is provided
 if [ $# -lt 4 ]; then
-    echo "Usage: $0 <carla_port> <gpu_device> <checkpoint_path> [additional_eval_parameters]"
+    echo "Usage: $0 <carla_port> <gpu_device> <checkpoint_path> <run_name> [additional_eval_parameters]"
     exit 1
 fi
 
-# Configuration
 CARLA_PORT=$1
 GPU_DEVICE=$2
 CHECKPOINT_PATH=$3
-LOG_FILE="eval_log_${CARLA_PORT}.log"
+RUN_NAME=$4
+LOG_FILE="eval_log_${CARLA_PORT}_${RUN_NAME}.log"
+
+ADDITIONAL_PARAMS="${@:5}"
 CARLA_SERVER_COMMAND="$CARLA_ROOT/CarlaUE4.sh -RenderOffScreen -carla-port=$CARLA_PORT -benchmark -fps=10"
 # EVAL_SCRIPT="dreamerv3/eval_safety.py"
 COMMON_PARAMS="--env.world.carla_port $CARLA_PORT --dreamerv3.jax.policy_devices $GPU_DEVICE --dreamerv3.run.from_checkpoint $CHECKPOINT_PATH"
-ADDITIONAL_PARAMS="${@:4}"  # Capture all additional parameters passed to the script
+# ADDITIONAL_PARAMS="${@:4}"  # Capture all additional parameters passed to the script
 # EVAL_COMMAND="python -u $EVAL_SCRIPT $COMMON_PARAMS $ADDITIONAL_PARAMS"
 
 EVAL_MODULE="dreamerv3.eval_safety"
@@ -78,14 +79,8 @@ log_with_timestamp "Starting eval on port $CARLA_PORT..."
 log_with_timestamp "Eval command: $EVAL_COMMAND"
 start_eval
 
-while true; do
-    # Check if the eval script is still running
-    if ! pgrep -f "$EVAL_MATCH" > /dev/null; then
-        log_with_timestamp "Eval script crashed on port $CARLA_PORT. Restarting..."
-        start_eval
-    fi
-    # Check if CARLA server needs to be restarted
-    launch_carla
-    # Check every minute
-    sleep 60
-done
+
+# Run once and exit (sweep-friendly)
+wait $EVAL_PID
+log_with_timestamp "Eval finished for run_name=$RUN_NAME"
+exit 0

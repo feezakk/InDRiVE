@@ -70,10 +70,14 @@ class RoutePoolMixin:
             self.goal = [(float(ex), float(ey))]
             start_loc = carla.Location(x=self.lane_start_point[0], y=self.lane_start_point[1], z=0.0)
 
-            wp = self._world._map.get_waypoint(start_loc, project_to_road=True, lane_type=carla.LaneType.Driving)
-            tf = wp.transform
-            tf.location.z = max(tf.location.z, 0.5)
-            start_tf  = carla.Transform(start_loc)
+            wp = self._world._map.get_waypoint(
+                start_loc, project_to_road=True, lane_type=carla.LaneType.Driving
+            )
+            if wp is None:
+                raise RuntimeError(f"No driving waypoint near start_loc={start_loc} for idx={idx}")
+
+            start_tf = wp.transform
+            start_tf.location.z = max(start_tf.location.z, 0.5)
 
         else:
             print(self._starts[idx])

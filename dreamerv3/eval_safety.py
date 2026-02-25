@@ -36,12 +36,65 @@ def wrap_env(env, config):
             env = embodied.wrappers.ClipAction(env, name)
     return env
 
-
+import os
 
 # def eval_safety(agent, env, logger, args):
 def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
     print("Start evaluation.")
     logdir = embodied.Path(args.logdir); logdir.mkdirs()
+    import csv, atexit
+
+    EP_FIELDS = [
+        "episode_index", "env_step", "length", "return",
+        "success",
+        "collision", "off_road", "out_of_lane", "wrong_direction", "too_slow", "time_exceeded", "destination_reached",
+        "mean_speed_ms", "std_speed_ms",
+        "mean_abs_acc_ms2", "mean_abs_jerk_ms3",
+        "mean_abs_dsteer", "mean_abs_dthrottle",
+        "mean_abs_lat_acc_ms2",
+        "lane_pair_index", "traffic_density",
+    ]
+    ep_csv_path = str(logdir / "eval_episode_metrics.csv")
+    ep_csv_exists = embodied.Path(ep_csv_path).exists()
+    ep_csv_f = open(ep_csv_path, "a", newline="")
+    ep_csv_w = csv.DictWriter(ep_csv_f, fieldnames=EP_FIELDS)
+    if not ep_csv_exists:
+        ep_csv_w.writeheader()
+        ep_csv_f.flush()
+    atexit.register(lambda: ep_csv_f.close())
+    ep_ep_idx = {"v": 0}
+
+    def _any_key(ep, ep_info, keys):
+        for k in keys:
+            if k in ep_info:
+                v = np.asarray(ep_info[k])
+                if v.size and np.any(v):
+                    return True
+            if k in ep:
+                v = np.asarray(ep[k])
+                if v.size and np.any(v):
+                    return True
+        return False
+
+    def _series(ep, ep_info, keys, n, default=0.0):
+        for k in keys:
+            if k in ep:
+                return np.asarray(ep[k]).reshape(-1)[:n].astype(np.float32)
+            if k in ep_info:
+                return np.asarray(ep_info[k]).reshape(-1)[:n].astype(np.float32)
+        return np.full((n,), float(default), np.float32)
+
+    def _safe_mean_abs(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.mean(np.abs(x))) if x.size else 0.0
+
+    def _safe_mean(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.mean(x)) if x.size else 0.0
+
+    def _safe_std(x):
+        x = np.asarray(x, np.float64).reshape(-1)
+        return float(np.std(x)) if x.size else 0.0
     step = logger.step
     agg = embodied.Metrics()
     print("Observation space:", env.obs_space)
@@ -69,11 +122,11 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
             w.writeheader(); f.flush()
         return f, w
 
-    train_csv_f, train_csv_w = _make_writer(logdir / "train_success.csv")
-    eval_csv_f,  eval_csv_w  = _make_writer(logdir / "eval_success.csv")
-    atexit.register(lambda: (train_csv_f.close(), eval_csv_f.close()))
-    train_ep_idx = {"v": 0}
-    eval_ep_idx  = {"v": 0}
+    train_succ_f, train_succ_w = _make_writer(logdir / "train_success.csv")
+    eval_succ_f,  eval_succ_w  = _make_writer(logdir / "eval_success.csv")
+    atexit.register(lambda: (train_succ_f.close(), eval_succ_f.close()))
+    train_succ_idx = {"v": 0}
+    eval_succ_idx  = {"v": 0}
 
     def _csv_log(ep, ep_info, is_eval=False):
         # Episode stats
@@ -90,7 +143,7 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
         lat_mean = float(np.nan) if not m.any() else float(lat[m].mean())
         lat_max  = float(np.nan) if not m.any() else float(np.abs(lat[m]).max())  # or plain max()
         row = {
-            "episode_index": (eval_ep_idx["v"] if is_eval else train_ep_idx["v"]),
+            "episode_index": (eval_succ_idx["v"] if is_eval else train_succ_idx["v"]),
             "env_step": int(logger.step),
             "length": length,
             "return": ret,
@@ -103,10 +156,10 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
             "lat_mean": lat_mean,
             "lat_max": lat_max,
         }
-        w, f = (eval_csv_w, eval_csv_f) if is_eval else (train_csv_w, train_csv_f)
+        w, f = (eval_succ_w, eval_succ_f) if is_eval else (train_succ_w, train_succ_f)
         w.writerow(row); f.flush()
-        if is_eval: eval_ep_idx["v"] += 1
-        else:       train_ep_idx["v"] += 1
+        if is_eval: eval_succ_idx["v"] += 1
+        else:       train_succ_idx["v"] += 1
     # ---------------------------------------
 
 
@@ -146,6 +199,69 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
         for k, v in ep_info.items():
             log(k, v)
 
+        length = int(len(ep["reward"]) - 1)
+        ret = float(ep["reward"].astype(np.float64).sum())
+        n = max(1, length)
+
+        collision = int(_any_key(ep, ep_info, ["is_collision", "collision"]))
+        off_road = int(_any_key(ep, ep_info, ["is_off_road", "off_road"]))
+        out_of_lane = int(_any_key(ep, ep_info, ["out_of_lane", "lane_invasion", "offlane"]))
+        wrong_direction = int(_any_key(ep, ep_info, ["is_wrong_direction", "wrong_direction"]))
+        too_slow = int(_any_key(ep, ep_info, ["too_slow", "not_moving"]))
+        time_exceeded = int(_any_key(ep, ep_info, ["time_exceeded"]))
+        destination_reached = int(_any_key(ep, ep_info, ["is_destination_reached", "destination_reached", "goal_reached"]))
+
+        success = int(
+            (destination_reached == 1)
+            and (collision == 0)
+            and (off_road == 0)
+            and (out_of_lane == 0)
+            and (wrong_direction == 0)
+            and (too_slow == 0)
+            and (time_exceeded == 0)
+        )
+
+        speed_ms = _series(ep, ep_info, ["speed_ms", "speed_norm"], n, default=0.0)
+        acc_ms2 = _series(ep, ep_info, ["comfort_acc_ms2"], n, default=0.0)
+        jerk_ms3 = _series(ep, ep_info, ["comfort_jerk_ms3"], n, default=0.0)
+        dsteer = _series(ep, ep_info, ["comfort_dsteer_abs"], n, default=0.0)
+        dthr = _series(ep, ep_info, ["comfort_dthrottle_abs"], n, default=0.0)
+        latacc = _series(ep, ep_info, ["comfort_lat_acc_ms2"], n, default=0.0)
+
+        lane_pair = ep_info.get("lane_pair_index", ep.get("lane_pair_index", "NA"))
+        dens = ep_info.get("traffic_density", ep.get("traffic_density", "NA"))
+
+        row = {
+            "episode_index": int(eval_succ_idx["v"]),
+            "env_step": int(logger.step),
+            "length": int(length),
+            "return": float(ret),
+
+            "success": int(success),
+            "collision": int(collision),
+            "off_road": int(off_road),
+            "out_of_lane": int(out_of_lane),
+            "wrong_direction": int(wrong_direction),
+            "too_slow": int(too_slow),
+            "time_exceeded": int(time_exceeded),
+            "destination_reached": int(destination_reached),
+
+            "mean_speed_ms": _safe_mean(speed_ms),
+            "std_speed_ms": _safe_std(speed_ms),
+
+            "mean_abs_acc_ms2": _safe_mean_abs(acc_ms2),
+            "mean_abs_jerk_ms3": _safe_mean_abs(jerk_ms3),
+            "mean_abs_dsteer": _safe_mean_abs(dsteer),
+            "mean_abs_dthrottle": _safe_mean_abs(dthr),
+            "mean_abs_lat_acc_ms2": _safe_mean_abs(latacc),
+
+            "lane_pair_index": lane_pair if isinstance(lane_pair, (int, float, str)) else "NA",
+            "traffic_density": dens if isinstance(dens, (int, float, str)) else "NA",
+        }
+        ep_csv_w.writerow(row)
+        ep_csv_f.flush()
+        ep_ep_idx["v"] += 1
+
         logger.add(agg.result()); logger.add(timer.stats(), prefix="timer"); logger.write(fps=True)
         agg.add(stats, prefix="stats")
 
@@ -175,9 +291,13 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
     metrics = EvalMetrics(outdir=args.logdir, fps=fps, agg=agg_mode, tau=tau,
                         calibrator_path=calpath)
     
+    # eval_metrics = EvalMetrics(
+    #     outdir=str(embodied.Path(args.logdir)),
+    #     fps=fps, agg=agg, tau=tau, calibrator_path=calpath
+    # )
     eval_metrics = EvalMetrics(
         outdir=str(embodied.Path(args.logdir)),
-        fps=fps, agg=agg, tau=tau, calibrator_path=calpath
+        fps=fps, agg=agg_mode, tau=tau, calibrator_path=calpath
     )
     driver.on_episode(lambda ep, ep_info, worker: eval_metrics.on_episode(ep, ep_info))
     driver.on_episode(lambda ep, ep_info, worker: _csv_log(ep, ep_info, is_eval=True))
@@ -199,7 +319,10 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
 
     print("Start evaluation loop.")
     policy = lambda *x: agent.policy(*x, mode="eval")
-    while step < args.steps:
+    eval_episodes = int(os.environ.get("EVAL_EPISODES", "50"))
+    # while step < args.steps:
+    #     driver(policy, steps=100)
+    while (ep_ep_idx["v"] < eval_episodes) and (step < args.steps):
         driver(policy, steps=100)
     logger.write()
     eval_metrics.close()
@@ -239,7 +362,6 @@ def main(argv=None):
             "run.log_keys_sum": "(travel_distance|destination_reached|out_of_lane|time_exceeded|is_collision|timesteps)",
             "run.log_keys_mean": "(travel_distance|ttc|speed_norm|wpt_dis)",
             "run.log_keys_max": "(travel_distance|ttc|speed_norm|wpt_dis)",
-            "run.steps": 5e4,
         }
     )
 

@@ -177,6 +177,22 @@ class CarlaTrainEnv(CarlaWptEnv):
         self.goal_radius = float(config.get("goal_radius", 10.0))
         self.allowed_end_indices: List[int] = []
 
+        # --- comfort / smoothness bookkeeping (for CSV + reviewer metrics) ---
+        self._dt = 1.0 / float(getattr(self, "_fps", 10.0))
+        self._prev_speed_ms = None
+        self._prev_acc_ms2 = 0.0
+        self._prev_yaw_deg = None
+
+        self._prev_control = None
+        self._last_dsteer = 0.0
+        self._last_dthrottle = 0.0
+        self._last_dbrake = 0.0
+
+        self._prev_action_idx = None
+
+        # Track current traffic density used by this env instance (for logging).
+        self.current_vehicle_density = int(getattr(self._config, "num_vehicles", self._config.get("num_vehicles", 0)))
+
 
     def _ensure_pygame(self, h, w):
         if self._pg_screen is None:
@@ -225,6 +241,21 @@ class CarlaTrainEnv(CarlaWptEnv):
             img = self._pg_font.render(s, True, (255, 255, 255))
             surface.blit(img, (x, y + i*line_h))
         return (w, h) if return_size else None
+    
+    def _action_to_index(self, action) -> Union[int, None]:
+        """Robustly derive a discrete action index from multiple action formats."""
+        try:
+            a_arr = np.asarray(action).reshape(-1)
+            if a_arr.size == 1:
+                v = a_arr[0]
+                # accept integer-like floats too
+                vf = float(v)
+                if abs(vf - round(vf)) < 1e-6 and vf >= 0:
+                    return int(round(vf))
+                return None
+            return int(np.argmax(a_arr))
+        except Exception:
+            return None
 
 
     def _render_pygame(self, obs, info):
@@ -519,7 +550,35 @@ class CarlaTrainEnv(CarlaWptEnv):
 
         self._world.spawn_auto_actors(self._config.num_vehicles)
 
+        try:
+            self.current_vehicle_density = int(self._config.num_vehicles)
+        except Exception:
+            pass
+
         self._update_waypoints()
+
+        # --- reset comfort state ---
+        self._dt = 1.0 / float(getattr(self, "_fps", 10.0))
+        self._prev_speed_ms = 0.0
+        self._prev_acc_ms2 = 0.0
+        try:
+            self._prev_yaw_deg = float(self.ego.get_transform().rotation.yaw)
+        except Exception:
+            self._prev_yaw_deg = None
+        self._prev_control = None
+        self._last_dsteer = 0.0
+        self._last_dthrottle = 0.0
+        self._last_dbrake = 0.0
+        self._prev_action_idx = None
+
+        # Ensure current density log matches what you spawned on reset.
+        try:
+            self.current_vehicle_density = int(self._config.num_vehicles)
+        except Exception:
+            try:
+                self.current_vehicle_density = int(self._config.get("num_vehicles", self.current_vehicle_density))
+            except Exception:
+                pass
 
         self.r_speed = 0.0
         self.r_velocity = 0
@@ -543,10 +602,21 @@ class CarlaTrainEnv(CarlaWptEnv):
         except Exception:
             pass
 
-
     def apply_control(self, action) -> None:
         control = self.get_vehicle_control(action)
-        # print(f"[CTRL] throttle={control.throttle:.2f} brake={control.brake:.2f} steer={control.steer:.2f}")
+
+        # comfort deltas (steer/throttle/brake change magnitude)
+        prev = getattr(self, "_prev_control", None)
+        if prev is None:
+            self._last_dsteer = 0.0
+            self._last_dthrottle = 0.0
+            self._last_dbrake = 0.0
+        else:
+            self._last_dsteer = float(abs(control.steer - prev.steer))
+            self._last_dthrottle = float(abs(control.throttle - prev.throttle))
+            self._last_dbrake = float(abs(control.brake - prev.brake))
+
+        self._prev_control = control
         self.get_ego_vehicle().apply_control(control)
 
     def get_vehicle_pos(self , vehicle: carla.Actor) -> Tuple[float, float]:
@@ -719,6 +789,7 @@ class CarlaTrainEnv(CarlaWptEnv):
 
             self._density_index = (self._density_index + 1) % len(self.vehicle_densities)
             new_density = self.vehicle_densities[self._density_index]
+            self.current_vehicle_density = int(new_density)
             self._world.spawn_auto_actors(new_density)
             print(f"[Vehicle Density] Spawning {new_density} traffic vehicles.")
 
@@ -729,6 +800,39 @@ class CarlaTrainEnv(CarlaWptEnv):
         vx, vy = self.get_vehicle_velocity(self.get_ego_vehicle())
         speed_ms = math.hypot(vx, vy)
         speed_kmh = speed_ms * 3.6
+
+        # --- comfort metrics (acceleration/jerk/yaw rate proxies) ---
+        dt = float(getattr(self, "_dt", 0.1))
+        if dt <= 0:
+            dt = 0.1
+
+        prev_speed = speed_ms if self._prev_speed_ms is None else float(self._prev_speed_ms)
+        acc_ms2 = float((speed_ms - prev_speed) / dt)
+        jerk_ms3 = float((acc_ms2 - float(getattr(self, "_prev_acc_ms2", 0.0))) / dt)
+
+        # yaw-rate and lateral acceleration proxy: a_lat ≈ v * yaw_rate
+        yaw_rate_rps = 0.0
+        lat_acc_ms2 = 0.0
+        try:
+            yaw_deg = float(self.ego.get_transform().rotation.yaw)
+            if self._prev_yaw_deg is not None:
+                dyaw = yaw_deg - float(self._prev_yaw_deg)
+                # wrap to [-180, 180]
+                dyaw = (dyaw + 180.0) % 360.0 - 180.0
+                yaw_rate_rps = math.radians(dyaw) / dt
+                lat_acc_ms2 = float(speed_ms * yaw_rate_rps)
+            self._prev_yaw_deg = yaw_deg
+        except Exception:
+            pass
+
+        self._prev_speed_ms = float(speed_ms)
+        self._prev_acc_ms2 = float(acc_ms2)
+
+        action_idx = self._action_to_index(action)
+        action_changed = int(
+            (action_idx is not None) and (self._prev_action_idx is not None) and (action_idx != self._prev_action_idx)
+        )
+        self._prev_action_idx = action_idx if action_idx is not None else self._prev_action_idx
 
         # Track consecutive slow steps using min_speed_mps (config may supply m/s)
         if speed_ms < getattr(self, "min_speed_mps", 0.5):
@@ -782,6 +886,21 @@ class CarlaTrainEnv(CarlaWptEnv):
             info = {f"eval_{k}": v for k, v in info.items()}
             self.obs = {**self.obs, **info}
         info["speed_kmh"] = speed_kmh  # so HUD can show it
+
+        # --- comfort + speed tracking fields for CSV logging ---
+        info["speed_ms"] = float(speed_ms)
+        info["comfort_acc_ms2"] = float(acc_ms2)
+        info["comfort_jerk_ms3"] = float(jerk_ms3)
+        info["comfort_yaw_rate_rps"] = float(yaw_rate_rps)
+        info["comfort_lat_acc_ms2"] = float(lat_acc_ms2)
+
+        info["comfort_dsteer_abs"] = float(getattr(self, "_last_dsteer", 0.0))
+        info["comfort_dthrottle_abs"] = float(getattr(self, "_last_dthrottle", 0.0))
+        info["comfort_dbrake_abs"] = float(getattr(self, "_last_dbrake", 0.0))
+        info["comfort_action_idx"] = int(action_idx) if action_idx is not None else -1
+        info["comfort_action_changed"] = int(action_changed)
+
+        info["traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
 
         if self._config.display.enable:
             self._render_pygame(self.obs, info)

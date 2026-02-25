@@ -11,17 +11,17 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
     # Default tables if YAML does not provide them
 
     LANE_START_POINTS = [
-        # [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0], #Straight
-        # [148.41, 306.5, 1.0,0,0,0], [-8.54,   277.57, 1.0,0,90,0], # Left Turn
-        [19.19, 302.95, 1.0,0,180,0], [-3.42, 141.02, 1.0,0,270,0], # Right Turns
-        # [16.98, 106.46, 1.0,0,180,0], [-7.82, 282.72, 1.0,0,90,0], #Two Turns
+      [60.7, 306.7, 1.0,0,0,0], [-7.08, 209.11, 1.0,0,90,0], #Straight
+      [148.41, 306.5, 1.0,0,0,0], [-8.54,   277.57, 1.0,0,90,0], # Left Turn
+      [19.19, 302.95, 1.0,0,180,0], [-3.42, 141.02, 1.0,0,270,0], # Right Turns
+      [16.98, 106.46, 1.0,0,180,0], [-7.82, 282.72, 1.0,0,90,0], #Two Turns  
     ]
 
     LANE_END_POINTS = [
-        # [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], #Straight
-        # [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
-        [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0], # Right Turns
-        # [13.05, 306.95, 1.0,0,0,0], [193.49, 287.6, 1.0,0,270,0], #Two Turns
+      [148.41, 306.5, 1.0,0,0,0], [-8.54, 277.57, 1.0,0,90,0], #Straight
+      [193.09, 277.68, 1.0,0,270,0], [18.61,  306.92, 1.0,0,0,0], # Left Turn
+      [-3.16, 276.42, 1.0,0,270,0], [20.45,   109.42, 1.0,0,0,0], # Right Turns
+      [13.05, 306.95, 1.0,0,0,0], [193.49, 287.6, 1.0,0,270,0], #Two Turns
     ]
 
     def __init__(self, config):
@@ -53,6 +53,15 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
 
         # Route pooling
         self._init_route_routing()
+
+        # --- comfort bookkeeping (evaluation) ---
+        self._dt = 1.0 / float(self._fps) if getattr(self, "_fps", 0) else 0.1
+        self._prev_speed_ms = None
+        self._prev_acc_ms2 = 0.0
+        self._prev_yaw_deg = None
+        self._prev_control = None
+
+        self.current_vehicle_density = int(getattr(self._config, "num_vehicles", self._config.get("num_vehicles", 0)))
 
     def _ensure_pygame(self, h, w):
         if self._pg_screen is None:
@@ -160,6 +169,21 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
 
         self._world.spawn_auto_actors(self._config.num_vehicles)
 
+        # --- reset comfort state ---
+        self._dt = 1.0 / float(getattr(self, "_fps", 10.0))
+        self._prev_speed_ms = 0.0
+        self._prev_acc_ms2 = 0.0
+        try:
+            self._prev_yaw_deg = float(self.ego.get_transform().rotation.yaw)
+        except Exception:
+            self._prev_yaw_deg = None
+        self._prev_control = None
+
+        try:
+            self.current_vehicle_density = int(self._config.num_vehicles)
+        except Exception:
+            pass
+
         self.ego_planner = RandomPlanner(vehicle=self.ego)
         self.on_step()  # compute initial waypoints
         self.obs, _ = self._observer.get_observation(self.get_state())
@@ -171,6 +195,52 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
         # basic kinematics for HUD and terminals
         vx, vy = self.ego.get_velocity().x, self.ego.get_velocity().y
         speed_ms = math.hypot(vx, vy)
+
+        dt = float(getattr(self, "_dt", 0.1))
+        if dt <= 0:
+            dt = 0.1
+
+        prev_speed = speed_ms if self._prev_speed_ms is None else float(self._prev_speed_ms)
+        acc_ms2 = float((speed_ms - prev_speed) / dt)
+        jerk_ms3 = float((acc_ms2 - float(getattr(self, "_prev_acc_ms2", 0.0))) / dt)
+
+        yaw_rate_rps = 0.0
+        lat_acc_ms2 = 0.0
+        try:
+            yaw_deg = float(self.ego.get_transform().rotation.yaw)
+            if self._prev_yaw_deg is not None:
+                dyaw = yaw_deg - float(self._prev_yaw_deg)
+                dyaw = (dyaw + 180.0) % 360.0 - 180.0
+                yaw_rate_rps = math.radians(dyaw) / dt
+                lat_acc_ms2 = float(speed_ms * yaw_rate_rps)
+            self._prev_yaw_deg = yaw_deg
+        except Exception:
+            pass
+
+        self._prev_speed_ms = float(speed_ms)
+        self._prev_acc_ms2 = float(acc_ms2)
+
+        # control deltas: use CARLA-reported control if available
+        dsteer = dthrottle = dbrake = 0.0
+        try:
+            ctrl = self.ego.get_control()
+            if self._prev_control is not None:
+                dsteer = float(abs(ctrl.steer - self._prev_control.steer))
+                dthrottle = float(abs(ctrl.throttle - self._prev_control.throttle))
+                dbrake = float(abs(ctrl.brake - self._prev_control.brake))
+            self._prev_control = ctrl
+        except Exception:
+            pass
+
+        info["speed_ms"] = float(speed_ms)
+        info["comfort_acc_ms2"] = float(acc_ms2)
+        info["comfort_jerk_ms3"] = float(jerk_ms3)
+        info["comfort_yaw_rate_rps"] = float(yaw_rate_rps)
+        info["comfort_lat_acc_ms2"] = float(lat_acc_ms2)
+        info["comfort_dsteer_abs"] = float(dsteer)
+        info["comfort_dthrottle_abs"] = float(dthrottle)
+        info["comfort_dbrake_abs"] = float(dbrake)
+        info["traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
 
         # self._slow_steps = self._slow_steps + 1 if speed_ms < self.min_speed_mps else 0
         self._hud_slow_steps = self._hud_slow_steps + 1 if speed_ms < self.min_speed_mps else 0
