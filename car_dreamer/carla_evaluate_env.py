@@ -100,6 +100,7 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
         self._prev_acc_ms2 = 0.0
         self._prev_yaw_deg = None
         self._prev_control = None
+        self._prev_lat_acc_ms2 = 0.0
 
         self.current_vehicle_density = int(getattr(self._config, "num_vehicles", self._config.get("num_vehicles", 0)))
 
@@ -289,6 +290,7 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
         except Exception:
             self._prev_yaw_deg = None
         self._prev_control = None
+        self._prev_lat_acc_ms2 = 0.0
 
 
         self.ego_planner = RandomPlanner(vehicle=self.ego)
@@ -324,6 +326,10 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
         except Exception:
             pass
 
+        prev_lat_acc = float(getattr(self, "_prev_lat_acc_ms2", 0.0))
+        lat_jerk_ms3 = float((lat_acc_ms2 - prev_lat_acc) / dt)
+        self._prev_lat_acc_ms2 = float(lat_acc_ms2)
+
         self._prev_speed_ms = float(speed_ms)
         self._prev_acc_ms2 = float(acc_ms2)
 
@@ -349,6 +355,17 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
         info["comfort_dbrake_abs"] = float(dbrake)
         info["traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
 
+        # ensure these get forwarded through the logging channel
+        info["log_comfort_acc_ms2"] = float(acc_ms2)
+        info["log_comfort_jerk_ms3"] = float(jerk_ms3)
+        info["log_comfort_lat_acc_ms2"] = float(lat_acc_ms2)
+        info["log_comfort_dsteer_abs"] = float(dsteer)
+        info["log_comfort_dthrottle_abs"] = float(dthrottle)
+
+        info["log_speed_ms"] = float(speed_ms)
+        info["log_traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
+        info["log_lane_pair_index"] = int(getattr(self, "_lane_pair_index", -1))
+
         # self._slow_steps = self._slow_steps + 1 if speed_ms < self.min_speed_mps else 0
         self._hud_slow_steps = self._hud_slow_steps + 1 if speed_ms < self.min_speed_mps else 0
         info["hud_slow_steps"] = int(self._hud_slow_steps)
@@ -360,5 +377,8 @@ class CarlaEvaluateEnv(RoutePoolMixin, CarlaWptEnv):
 
         info["traffic_density"] = int(getattr(self, "current_vehicle_density", -1))
         info["lane_pair_index"] = int(getattr(self, "_lane_pair_index", -1))
+
+        info["comfort_lat_jerk_ms3"] = float(lat_jerk_ms3)
+        info["log_comfort_lat_jerk_ms3"] = float(lat_jerk_ms3)
 
         return obs, rew, done, info

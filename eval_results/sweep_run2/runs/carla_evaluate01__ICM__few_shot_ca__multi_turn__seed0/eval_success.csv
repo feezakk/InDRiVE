@@ -1,0 +1,2 @@
+episode_index,env_step,length,return,is_collision,out_of_lane,destination_reached,wrong_direction,too_slow,off_road,lat_mean,lat_max
+0,263,262,11320.125273919231,0,1,0,0,0,0,0.6231283325957888,1.8092896938323975

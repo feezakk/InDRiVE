@@ -1,5 +1,5 @@
 {
-  "seeds": [0, 1, 2, 3, 4],
+  "seeds": [0, 1, 2],
 
   "methods": {
     "InDRiVE": {
@@ -26,9 +26,9 @@
   "phases": ["zero_shot", "few_shot_lf", "few_shot_ca"],
 
   "eval": {
-    "steps": 50000,
-    "episodes": 50,
-    "densities": [0, 5, 10, 20, 30, 40],
-    "tasks": ["carla_evaluate01", "carla_evaluate", "carla_evaluate03", "carla_evaluate04"]
+    "steps": 20000,
+    "episodes": 20,
+    "densities": [0, 5, 10, 20],
+    "tasks": ["carla_evaluate01", "carla_evaluate"]
     }
 }

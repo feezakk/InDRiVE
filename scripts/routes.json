@@ -10,17 +10,6 @@
     "right": [4, 5],
     "left": [2, 3],
     "multi_turn": [6, 7]
-  },
-  "carla_evaluate03": {
-    "straight": [0, 1],
-    "right": [2, 3],
-    "left": [4, 5],
-    "multi_turn": [6, 7]
-  },
-  "carla_evaluate04": {
-    "straight": [0, 1],
-    "right": [2, 3],
-    "left": [4, 5],
-    "multi_turn": [6, 7]
   }
+ 
 }

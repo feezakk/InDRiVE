@@ -1,0 +1,20 @@
+{
+  "seeds": [0, 1, 2],
+
+  "methods": {
+    "ICM": {
+      "zero_shot":   "/data/feeza/experiments/pretrain_icm/{seed}/checkpoint_best.ckpt",
+      "few_shot_lf": "/data/feeza/experiments/finetune_icm/{seed}/checkpoint_best.ckpt",
+      "few_shot_ca": "/data/feeza/experiments/finetune_icm/{seed}/checkpoint_best.ckpt"
+    }
+  },
+
+  "phases": ["zero_shot", "few_shot_lf", "few_shot_ca"],
+
+  "eval": {
+    "steps": 20000,
+    "episodes": 20,
+    "densities": [0, 5, 10, 20],
+    "tasks": ["carla_evaluate01", "carla_evaluate"]
+    }
+}

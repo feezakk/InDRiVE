@@ -52,11 +52,11 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
         "mean_abs_acc_ms2", "mean_abs_jerk_ms3",
         "mean_abs_dsteer", "mean_abs_dthrottle",
         "mean_abs_lat_acc_ms2",
-        "lane_pair_index", "traffic_density",
+        "lane_pair_index", "traffic_density", "mean_abs_lat_jerk_ms3",
     ]
     ep_csv_path = str(logdir / "eval_episode_metrics.csv")
     ep_csv_exists = embodied.Path(ep_csv_path).exists()
-    ep_csv_f = open(ep_csv_path, "a", newline="")
+    ep_csv_f = open(ep_csv_path, "w", newline="")
     ep_csv_w = csv.DictWriter(ep_csv_f, fieldnames=EP_FIELDS)
     if not ep_csv_exists:
         ep_csv_w.writeheader()
@@ -111,7 +111,7 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
     def _make_writer(path):
         path = embodied.Path(path)
         exists = path.exists()
-        f = open(str(path), "a", newline="")
+        f = open(str(path), "w", newline="")
         fieldnames = [
             "episode_index","env_step","length","return",
             "is_collision", "out_of_lane", "destination_reached", "wrong_direction", "too_slow", "off_road" ,
@@ -161,6 +161,8 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
         if is_eval: eval_succ_idx["v"] += 1
         else:       train_succ_idx["v"] += 1
     # ---------------------------------------
+
+    
 
 
     def per_episode(ep, ep_info, _worker=None):
@@ -221,18 +223,77 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
             and (time_exceeded == 0)
         )
 
-        speed_ms = _series(ep, ep_info, ["speed_ms", "speed_norm"], n, default=0.0)
-        acc_ms2 = _series(ep, ep_info, ["comfort_acc_ms2"], n, default=0.0)
-        jerk_ms3 = _series(ep, ep_info, ["comfort_jerk_ms3"], n, default=0.0)
-        dsteer = _series(ep, ep_info, ["comfort_dsteer_abs"], n, default=0.0)
-        dthr = _series(ep, ep_info, ["comfort_dthrottle_abs"], n, default=0.0)
-        latacc = _series(ep, ep_info, ["comfort_lat_acc_ms2"], n, default=0.0)
+        if ep_ep_idx["v"] == 0:
+            print("DEBUG keys containing 'comfort' in ep:     ",
+                [k for k in ep.keys() if "comfort" in k])
+            print("DEBUG keys containing 'comfort' in ep_info:",
+                [k for k in ep_info.keys() if "comfort" in k])
+
+        # speed_ms = _series(ep, ep_info, ["speed_ms", "speed_norm"], n, default=0.0)
+        # acc_ms2 = _series(ep, ep_info, ["comfort_acc_ms2"], n, default=0.0)
+        # jerk_ms3 = _series(ep, ep_info, ["comfort_jerk_ms3"], n, default=0.0)
+        # dsteer = _series(ep, ep_info, ["comfort_dsteer_abs"], n, default=0.0)
+        # dthr = _series(ep, ep_info, ["comfort_dthrottle_abs"], n, default=0.0)
+        # latacc = _series(ep, ep_info, ["comfort_lat_acc_ms2"], n, default=0.0)
+
+        # speed may come from obs or from info/log_*
+        speed_ms = _series(
+            ep, ep_info,
+            ["speed_ms", "log_speed_ms", "speed_norm", "log_speed_norm"],
+            n, default=0.0
+        )
+
+        # comfort signals: accept both raw and log_-prefixed names
+        acc_ms2 = _series(
+            ep, ep_info,
+            ["comfort_acc_ms2", "log_comfort_acc_ms2"],
+            n, default=0.0
+        )
+        jerk_ms3 = _series(
+            ep, ep_info,
+            ["comfort_jerk_ms3", "log_comfort_jerk_ms3"],
+            n, default=0.0
+        )
+        dsteer = _series(
+            ep, ep_info,
+            ["comfort_dsteer_abs", "log_comfort_dsteer_abs"],
+            n, default=0.0
+        )
+        dthr = _series(
+            ep, ep_info,
+            ["comfort_dthrottle_abs", "log_comfort_dthrottle_abs"],
+            n, default=0.0
+        )
+        latacc = _series(
+            ep, ep_info,
+            ["comfort_lat_acc_ms2", "log_comfort_lat_acc_ms2"],
+            n, default=0.0
+        )
+
+        latjerk = _series(
+            ep, ep_info,
+            ["comfort_lat_jerk_ms3", "log_comfort_lat_jerk_ms3"],
+            n, default=0.0
+        )
+
+
+        # metadata keys may also be routed through log_*
+        lp_series = _series(
+            ep, ep_info,
+            ["lane_pair_index", "log_lane_pair_index"],
+            n, default=-1
+        )
+        dens_series = _series(
+            ep, ep_info,
+            ["traffic_density", "log_traffic_density"],
+            n, default=-1
+        )
 
         # lane_pair = ep_info.get("lane_pair_index", ep.get("lane_pair_index", "NA"))
-        lp_series = _series(ep, ep_info, ["lane_pair_index"], n, default=-1)
+        # lp_series = _series(ep, ep_info, ["lane_pair_index"], n, default=-1)
         lane_pair = int(lp_series[0]) if lp_series.size else -1
         # dens = ep_info.get("traffic_density", ep.get("traffic_density", "NA"))
-        dens_series = _series(ep, ep_info, ["traffic_density"], n, default=-1)
+        # dens_series = _series(ep, ep_info, ["traffic_density"], n, default=-1)
         dens = int(dens_series[0]) if dens_series.size else -1
 
         row = {
@@ -258,6 +319,7 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
             "mean_abs_dsteer": _safe_mean_abs(dsteer),
             "mean_abs_dthrottle": _safe_mean_abs(dthr),
             "mean_abs_lat_acc_ms2": _safe_mean_abs(latacc),
+            "mean_abs_lat_jerk_ms3": _safe_mean_abs(latjerk),
 
             # "lane_pair_index": lane_pair if isinstance(lane_pair, (int, float, str)) else "NA",
             # "traffic_density": dens if isinstance(dens, (int, float, str)) else "NA",
@@ -328,8 +390,24 @@ def eval_safety(agent, env, logger, args, safe_eval_cfg=None):
     eval_episodes = int(os.environ.get("EVAL_EPISODES", "50"))
     # while step < args.steps:
     #     driver(policy, steps=100)
-    while (ep_ep_idx["v"] < eval_episodes) and (step < args.steps):
+    # while (ep_ep_idx["v"] < eval_episodes) and (step < args.steps):
+    #     driver(policy, steps=100)
+    while step < args.steps:
         driver(policy, steps=100)
+    import json
+
+    done_path = embodied.Path(args.logdir) / "eval_done.json"
+    with open(str(done_path), "w") as f:
+        json.dump(
+            {
+                "ok": True,
+                "final_step": int(logger.step),
+                "target_steps": int(args.steps),
+                "episodes_logged": int(ep_ep_idx["v"]),
+            },
+            f,
+            indent=2,
+        )
     logger.write()
     eval_metrics.close()
 

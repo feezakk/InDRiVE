@@ -1,3 +1,2 @@
 task,phase,route_type,dens,method,mean_abs_acc_ms2,mean_abs_jerk_ms3,mean_abs_lat_acc_ms2,mean_abs_dsteer,mean_abs_dthrottle,mean_speed_ms,std_speed_ms
-carla_evaluate01,zero_shot,straight,0,InDRiVE,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,1.663 ± 0.369,0.410 ± 0.117
-carla_evaluate01,zero_shot,turn,0,InDRiVE,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,0.000 ± 0.000,1.612 ± 0.141,0.574 ± 0.059
+UNKNOWN,UNKNOWN,UNKNOWN,,UNKNOWN,0.097 ± 0.000,1.003 ± 0.000,0.075 ± 0.000,0.037 ± 0.000,0.011 ± 0.000,1.359 ± 0.000,0.500 ± 0.000
